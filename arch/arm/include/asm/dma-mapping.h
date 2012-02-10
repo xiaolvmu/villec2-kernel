@@ -11,6 +11,27 @@
 #include <asm/memory.h>
 
 #define DMA_ERROR_CODE	(~0)
+extern struct dma_map_ops arm_dma_ops;
+
+static inline struct dma_map_ops *get_dma_ops(struct device *dev)
+{
+	if (dev && dev->archdata.dma_ops)
+		return dev->archdata.dma_ops;
+	return &arm_dma_ops;
+}
+
+static inline void set_dma_ops(struct device *dev, struct dma_map_ops *ops)
+{
+	BUG_ON(!dev);
+	dev->archdata.dma_ops = ops;
+}
+
+#include <asm-generic/dma-mapping-common.h>
+
+static inline int dma_set_mask(struct device *dev, u64 mask)
+{
+	return get_dma_ops(dev)->set_dma_mask(dev, mask);
+}
 
 #ifdef __arch_page_to_dma
 #error Please update to __arch_pfn_to_dma
@@ -204,25 +225,6 @@ static inline void __dma_unmap_page(struct device *dev, dma_addr_t handle,
 }
 #endif 
 
-static inline dma_addr_t dma_map_single(struct device *dev, void *cpu_addr,
-		size_t size, enum dma_data_direction dir)
-{
-	unsigned long offset;
-	struct page *page;
-	dma_addr_t addr;
-
-	BUG_ON(!virt_addr_valid(cpu_addr));
-	BUG_ON(!virt_addr_valid(cpu_addr + size - 1));
-	BUG_ON(!valid_dma_direction(dir));
-
-	page = virt_to_page(cpu_addr);
-	offset = (unsigned long)cpu_addr & ~PAGE_MASK;
-	addr = __dma_map_page(dev, page, offset, size, dir);
-	debug_dma_map_page(dev, page, offset, size, dir, addr, true);
-
-	return addr;
-}
-
 static inline void dma_cache_pre_ops(void *virtual_addr,
 		size_t size, enum dma_data_direction dir)
 {
@@ -249,83 +251,14 @@ static inline void dma_cache_post_ops(void *virtual_addr,
 					 size, DMA_FROM_DEVICE);
 }
 
-static inline dma_addr_t dma_map_page(struct device *dev, struct page *page,
-	     unsigned long offset, size_t size, enum dma_data_direction dir)
-{
-	dma_addr_t addr;
-
-	BUG_ON(!valid_dma_direction(dir));
-
-	addr = __dma_map_page(dev, page, offset, size, dir);
-	debug_dma_map_page(dev, page, offset, size, dir, addr, false);
-
-	return addr;
-}
-
-static inline void dma_unmap_single(struct device *dev, dma_addr_t handle,
-		size_t size, enum dma_data_direction dir)
-{
-	debug_dma_unmap_page(dev, handle, size, dir, true);
-	__dma_unmap_page(dev, handle, size, dir);
-}
-
-static inline void dma_unmap_page(struct device *dev, dma_addr_t handle,
-		size_t size, enum dma_data_direction dir)
-{
-	debug_dma_unmap_page(dev, handle, size, dir, false);
-	__dma_unmap_page(dev, handle, size, dir);
-}
-
-
-static inline void dma_sync_single_for_cpu(struct device *dev,
-		dma_addr_t handle, size_t size, enum dma_data_direction dir)
-{
-	BUG_ON(!valid_dma_direction(dir));
-
-	debug_dma_sync_single_for_cpu(dev, handle, size, dir);
-
-	if (!dmabounce_sync_for_cpu(dev, handle, size, dir))
-		return;
-
-	__dma_single_dev_to_cpu(dma_to_virt(dev, handle), size, dir);
-}
-
-static inline void dma_sync_single_for_device(struct device *dev,
-		dma_addr_t handle, size_t size, enum dma_data_direction dir)
-{
-	BUG_ON(!valid_dma_direction(dir));
-
-	debug_dma_sync_single_for_device(dev, handle, size, dir);
-
-	if (!dmabounce_sync_for_device(dev, handle, size, dir))
-		return;
-
-	__dma_single_cpu_to_dev(dma_to_virt(dev, handle), size, dir);
-}
-
-static inline void dma_sync_single_range_for_cpu(struct device *dev,
-		dma_addr_t handle, unsigned long offset, size_t size,
-		enum dma_data_direction dir)
-{
-	dma_sync_single_for_cpu(dev, handle + offset, size, dir);
-}
-
-static inline void dma_sync_single_range_for_device(struct device *dev,
-		dma_addr_t handle, unsigned long offset, size_t size,
-		enum dma_data_direction dir)
-{
-	dma_sync_single_for_device(dev, handle + offset, size, dir);
-}
-
-extern int dma_map_sg(struct device *, struct scatterlist *, int,
+extern int arm_dma_map_sg(struct device *, struct scatterlist *, int,
+		enum dma_data_direction, struct dma_attrs *attrs);
+extern void arm_dma_unmap_sg(struct device *, struct scatterlist *, int,
+		enum dma_data_direction, struct dma_attrs *attrs);
+extern void arm_dma_sync_sg_for_cpu(struct device *, struct scatterlist *, int,
 		enum dma_data_direction);
-extern void dma_unmap_sg(struct device *, struct scatterlist *, int,
+extern void arm_dma_sync_sg_for_device(struct device *, struct scatterlist *, int,
 		enum dma_data_direction);
-extern void dma_sync_sg_for_cpu(struct device *, struct scatterlist *, int,
-		enum dma_data_direction);
-extern void dma_sync_sg_for_device(struct device *, struct scatterlist *, int,
-		enum dma_data_direction);
-
 
 #endif 
 #endif
