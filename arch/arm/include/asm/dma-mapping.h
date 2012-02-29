@@ -10,6 +10,8 @@
 #include <asm-generic/dma-coherent.h>
 #include <asm/memory.h>
 
+#define DMA_ERROR_CODE	(~0)
+
 #ifdef __arch_page_to_dma
 #error Please update to __arch_pfn_to_dma
 #endif
@@ -101,7 +103,7 @@ extern int dma_set_mask(struct device *, u64);
 
 static inline int dma_mapping_error(struct device *dev, dma_addr_t dma_addr)
 {
-	return dma_addr == ~0;
+	return dma_addr == DMA_ERROR_CODE;
 }
 
 static inline void *dma_alloc_noncoherent(struct device *dev, size_t size,
