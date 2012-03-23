@@ -10,8 +10,8 @@
  * GNU General Public License for more details.
  *
  */
-#include <linux/ion.h>
 #include <mach/msm_memtypes.h>
+#include <linux/msm_ion.h>
 #include "vcd_ddl.h"
 #include "vcd_ddl_shared_mem.h"
 #include "vcd_res_tracker_api.h"
