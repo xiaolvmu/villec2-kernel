@@ -1069,7 +1069,8 @@ struct task_struct {
 	unsigned in_execve:1;	
 	unsigned in_iowait:1;
 
-
+	/* task may not gain privileges */
+	unsigned no_new_privs:1;
 	
 	unsigned sched_reset_on_fork:1;
 	unsigned sched_contributes_to_load:1;
