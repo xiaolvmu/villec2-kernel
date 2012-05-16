@@ -5,6 +5,7 @@
 
 #include <linux/mm_types.h>
 #include <linux/scatterlist.h>
+#include <linux/dma-attrs.h>
 #include <linux/dma-debug.h>
 
 #include <asm-generic/dma-coherent.h>
@@ -121,22 +122,78 @@ static inline void dma_coherent_post_ops(void)
 
 extern int dma_supported(struct device *dev, u64 mask);
 
-extern void *dma_alloc_coherent(struct device *, size_t, dma_addr_t *, gfp_t);
+extern void *arm_dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
+			   gfp_t gfp, struct dma_attrs *attrs);
 
-extern void dma_free_coherent(struct device *, size_t, void *, dma_addr_t);
+#define dma_alloc_coherent(d, s, h, f) dma_alloc_attrs(d, s, h, f, NULL)
 
-int dma_mmap_coherent(struct device *, struct vm_area_struct *,
-		void *, dma_addr_t, size_t);
+static inline void *dma_alloc_attrs(struct device *dev, size_t size,
+				       dma_addr_t *dma_handle, gfp_t flag,
+				       struct dma_attrs *attrs)
+{
+	struct dma_map_ops *ops = get_dma_ops(dev);
+	void *cpu_addr;
+	BUG_ON(!ops);
 
+	cpu_addr = ops->alloc(dev, size, dma_handle, flag, attrs);
+	debug_dma_alloc_coherent(dev, size, *dma_handle, cpu_addr);
+	return cpu_addr;
+}
 
-extern void *dma_alloc_writecombine(struct device *, size_t, dma_addr_t *,
-		gfp_t);
+extern void arm_dma_free(struct device *dev, size_t size, void *cpu_addr,
+			 dma_addr_t handle, struct dma_attrs *attrs);
 
-#define dma_free_writecombine(dev,size,cpu_addr,handle) \
-	dma_free_coherent(dev,size,cpu_addr,handle)
+#define dma_free_coherent(d, s, c, h) dma_free_attrs(d, s, c, h, NULL)
 
-int dma_mmap_writecombine(struct device *, struct vm_area_struct *,
-		void *, dma_addr_t, size_t);
+static inline void dma_free_attrs(struct device *dev, size_t size,
+				     void *cpu_addr, dma_addr_t dma_handle,
+				     struct dma_attrs *attrs)
+{
+	struct dma_map_ops *ops = get_dma_ops(dev);
+	BUG_ON(!ops);
+
+	debug_dma_free_coherent(dev, size, cpu_addr, dma_handle);
+	ops->free(dev, size, cpu_addr, dma_handle, attrs);
+}
+
+extern int arm_dma_mmap(struct device *dev, struct vm_area_struct *vma,
+			void *cpu_addr, dma_addr_t dma_addr, size_t size,
+			struct dma_attrs *attrs);
+
+#define dma_mmap_coherent(d, v, c, h, s) dma_mmap_attrs(d, v, c, h, s, NULL)
+
+static inline int dma_mmap_attrs(struct device *dev, struct vm_area_struct *vma,
+				  void *cpu_addr, dma_addr_t dma_addr,
+				  size_t size, struct dma_attrs *attrs)
+{
+	struct dma_map_ops *ops = get_dma_ops(dev);
+	BUG_ON(!ops);
+	return ops->mmap(dev, vma, cpu_addr, dma_addr, size, attrs);
+}
+
+static inline void *dma_alloc_writecombine(struct device *dev, size_t size,
+				       dma_addr_t *dma_handle, gfp_t flag)
+{
+	DEFINE_DMA_ATTRS(attrs);
+	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
+	return dma_alloc_attrs(dev, size, dma_handle, flag, &attrs);
+}
+
+static inline void dma_free_writecombine(struct device *dev, size_t size,
+				     void *cpu_addr, dma_addr_t dma_handle)
+{
+	DEFINE_DMA_ATTRS(attrs);
+	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
+	return dma_free_attrs(dev, size, cpu_addr, dma_handle, &attrs);
+}
+
+static inline int dma_mmap_writecombine(struct device *dev, struct vm_area_struct *vma,
+		      void *cpu_addr, dma_addr_t dma_addr, size_t size)
+{
+	DEFINE_DMA_ATTRS(attrs);
+	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
+	return dma_mmap_attrs(dev, vma, cpu_addr, dma_addr, size, &attrs);
+}
 
 extern void __init init_consistent_dma_size(unsigned long size);
 
