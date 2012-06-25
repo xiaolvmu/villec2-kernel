@@ -109,6 +109,7 @@ struct ion_heap {
 	struct ion_heap_ops *ops;
 	int id;
 	const char *name;
+	void *priv;
 };
 
 struct mem_map_data {

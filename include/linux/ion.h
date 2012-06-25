@@ -57,6 +57,7 @@ struct ion_platform_heap {
 	enum ion_memory_types memory_type;
 	unsigned int has_outer_cache;
 	void *extra_data;
+	void *priv;
 };
 
 struct ion_platform_data {
