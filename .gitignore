@@ -84,7 +84,6 @@ GTAGS
 *.orig
 *~
 *.bak
-*.rej
 .config
 .config.old
 *.patch
