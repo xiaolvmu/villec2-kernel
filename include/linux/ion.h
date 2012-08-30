@@ -82,7 +82,8 @@ struct ion_client *msm_ion_client_create(unsigned int heap_mask,
 void ion_client_destroy(struct ion_client *client);
 
 struct ion_handle *ion_alloc(struct ion_client *client, size_t len,
-			     size_t align, unsigned int flags);
+			     size_t align, unsigned int heap_mask,
+			     unsigned int flags);
 
 void ion_free(struct ion_client *client, struct ion_handle *handle);
 
@@ -151,7 +152,9 @@ static inline struct ion_client *msm_ion_client_create(unsigned int heap_mask,
 static inline void ion_client_destroy(struct ion_client *client) { }
 
 static inline struct ion_handle *ion_alloc(struct ion_client *client,
-			size_t len, size_t align, unsigned int flags)
+					size_t len, size_t align,
+					unsigned int heap_mask,
+					unsigned int flags)
 {
 	return ERR_PTR(-ENODEV);
 }
