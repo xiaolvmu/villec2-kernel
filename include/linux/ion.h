@@ -34,6 +34,8 @@ enum ion_heap_type {
 #define ION_HEAP_SYSTEM_CONTIG_MASK	(1 << ION_HEAP_TYPE_SYSTEM_CONTIG)
 #define ION_HEAP_CARVEOUT_MASK		(1 << ION_HEAP_TYPE_CARVEOUT)
 
+#define ION_FLAG_CACHED 1
+
 #ifdef __KERNEL__
 #include <linux/err.h>
 #include <mach/ion.h>
