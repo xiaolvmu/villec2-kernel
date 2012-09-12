@@ -92,8 +92,7 @@ int ion_phys(struct ion_client *client, struct ion_handle *handle,
 struct sg_table *ion_sg_table(struct ion_client *client,
 			      struct ion_handle *handle);
 
-void *ion_map_kernel(struct ion_client *client, struct ion_handle *handle,
-			unsigned long flags);
+void *ion_map_kernel(struct ion_client *client, struct ion_handle *handle);
 
 void ion_unmap_kernel(struct ion_client *client, struct ion_handle *handle);
 
