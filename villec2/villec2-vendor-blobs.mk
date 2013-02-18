@@ -37,8 +37,6 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/bin/rmt_storage:system/bin/rmt_storage \
   vendor/htc/villec2/proprietary/bin/thermald:system/bin/thermald \
   vendor/htc/villec2/proprietary/bin/zchgd:system/bin/zchgd \
-  vendor/htc/villec2/proprietary/bin/btld:system/bin/btld \
-  vendor/htc/villec2/proprietary/lib/libbt-aptx-4.1.1.so:system/lib/libbt-aptx-4.1.1.so \
   vendor/htc/villec2/proprietary/bin/awb_camera:system/bin/awb_camera \
   vendor/htc/villec2/proprietary/lib/hw/camera.msm8660.so:system/lib/hw/camera.msm8660.so \
   vendor/htc/villec2/proprietary/lib/libBeautyChat.so:system/lib/libBeautyChat.so \
