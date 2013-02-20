@@ -47,7 +47,6 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/lib/libcamerapp.so:system/lib/libcamerapp.so \
   vendor/htc/villec2/proprietary/lib/libcam_oem_plugin.so:system/lib/libcam_oem_plugin.so \
   vendor/htc/villec2/proprietary/lib/libgemini.so:system/lib/libgemini.so \
-  vendor/htc/villec2/proprietary/lib/libidl.so:system/lib/libidl.so \
   vendor/htc/villec2/proprietary/lib/libimage-jpeg-enc-omx-comp.so:system/lib/libimage-jpeg-enc-omx-comp.so \
   vendor/htc/villec2/proprietary/lib/libimage-omx-common.so:system/lib/libimage-omx-common.so \
   vendor/htc/villec2/proprietary/lib/libmmcamera_frameproc.so:system/lib/libmmcamera_frameproc.so \
