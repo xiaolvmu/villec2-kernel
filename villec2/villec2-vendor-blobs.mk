@@ -101,6 +101,7 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/lib/libdsi_netctrl.so:system/lib/libdsi_netctrl.so \
   vendor/htc/villec2/proprietary/lib/libdsutils.so:system/lib/libdsutils.so \
   vendor/htc/villec2/proprietary/lib/libhtc_ril.so:system/lib/libhtc_ril.so \
+  vendor/htc/villec2/proprietary/lib/libidl.so:system/lib/libidl.so \
   vendor/htc/villec2/proprietary/lib/libnetmgr.so:system/lib/libnetmgr.so \
   vendor/htc/villec2/proprietary/lib/libqc-opt.so:system/lib/libqc-opt.so \
   vendor/htc/villec2/proprietary/lib/libqdp.so:system/lib/libqdp.so \
