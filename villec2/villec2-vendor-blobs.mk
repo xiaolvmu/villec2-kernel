@@ -40,6 +40,8 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/bin/awb_camera:system/bin/awb_camera \
   vendor/htc/villec2/proprietary/lib/hw/camera.msm8660.so:system/lib/hw/camera.msm8660.so \
   vendor/htc/villec2/proprietary/lib/libBeautyChat.so:system/lib/libBeautyChat.so \
+  vendor/htc/villec2/proprietary/lib/libHTC_DIS.so:system/lib/libHTC_DIS.so \
+  vendor/htc/villec2/proprietary/lib/libcameraasd.so:system/lib/libcameraasd.so \
   vendor/htc/villec2/proprietary/lib/libcamera_client.so:system/lib/libcamera_client.so \
   vendor/htc/villec2/proprietary/lib/libcameraface.so:system/lib/libcameraface.so \
   vendor/htc/villec2/proprietary/lib/libcamerapp.so:system/lib/libcamerapp.so \
