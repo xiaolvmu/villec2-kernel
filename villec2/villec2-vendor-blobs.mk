@@ -106,4 +106,5 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/lib/libmllite.so:system/lib/libmllite.so \
   vendor/htc/villec2/proprietary/lib/libmlplatform.so:system/lib/libmlplatform.so \
   vendor/htc/villec2/proprietary/lib/libmpl_jni.so:system/lib/libmpl_jni.so \
-  vendor/htc/villec2/proprietary/lib/libmpl.so:system/lib/libmpl.so
+  vendor/htc/villec2/proprietary/lib/libmpl.so:system/lib/libmpl.so \
+  vendor/htc/villec2/proprietary/lib/libv8.so:system/lib/libv8.so
