@@ -18,7 +18,8 @@
 PRODUCT_COPY_FILES += \
 	vendor/htc/villec2/proprietary/lib/libacdbloader.so:obj/lib/libacdbloader.so \
 	vendor/htc/villec2/proprietary/lib/libacdbmapper.so:obj/lib/libacdbmapper.so \
-	vendor/htc/villec2/proprietary/lib/libaudioalsa.so:obj/lib/libaudioalsa.so
+	vendor/htc/villec2/proprietary/lib/libaudioalsa.so:obj/lib/libaudioalsa.so \
+	vendor/htc/villec2/proprietary/lib/libmmjpeg.so:obj/lib/lib/libmmjpeg.so
 
 PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/lib/libacdbloader.so:system/lib/libacdbloader.so \
@@ -38,26 +39,20 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/bin/thermald:system/bin/thermald \
   vendor/htc/villec2/proprietary/bin/zchgd:system/bin/zchgd \
   vendor/htc/villec2/proprietary/bin/awb_camera:system/bin/awb_camera \
-  vendor/htc/villec2/proprietary/lib/hw/camera.msm8660.so:system/lib/hw/camera.msm8660.so \
-  vendor/htc/villec2/proprietary/lib/libBeautyChat.so:system/lib/libBeautyChat.so \
-  vendor/htc/villec2/proprietary/lib/libHTC_DIS.so:system/lib/libHTC_DIS.so \
-  vendor/htc/villec2/proprietary/lib/libcameraasd.so:system/lib/libcameraasd.so \
-  vendor/htc/villec2/proprietary/lib/libcamera_client.so:system/lib/libcamera_client.so \
   vendor/htc/villec2/proprietary/lib/libcameraface.so:system/lib/libcameraface.so \
   vendor/htc/villec2/proprietary/lib/libcamerapp.so:system/lib/libcamerapp.so \
   vendor/htc/villec2/proprietary/lib/libcam_oem_plugin.so:system/lib/libcam_oem_plugin.so \
+  vendor/htc/villec2/proprietary/lib/libDxOAF.so:system/lib/libDxOAF.so \
   vendor/htc/villec2/proprietary/lib/libgemini.so:system/lib/libgemini.so \
-  vendor/htc/villec2/proprietary/lib/libimage-jpeg-enc-omx-comp.so:system/lib/libimage-jpeg-enc-omx-comp.so \
-  vendor/htc/villec2/proprietary/lib/libimage-omx-common.so:system/lib/libimage-omx-common.so \
   vendor/htc/villec2/proprietary/lib/libmmcamera_frameproc.so:system/lib/libmmcamera_frameproc.so \
-  vendor/htc/villec2/proprietary/lib/libmmcamera_interface2.so:system/lib/libmmcamera_interface2.so \
   vendor/htc/villec2/proprietary/lib/libmmcamera_rawchipproc.so:system/lib/libmmcamera_rawchipproc.so \
-  vendor/htc/villec2/proprietary/lib/libmmcamera_statsproc31.so:system/lib/libmmcamera_statsproc31.so \
+  vendor/htc/villec2/proprietary/lib/libmmcamera_statsproc30.so:system/lib/libmmcamera_statsproc30.so \
   vendor/htc/villec2/proprietary/lib/libmmipl.so:system/lib/libmmipl.so \
   vendor/htc/villec2/proprietary/lib/libmmjpeg.so:system/lib/libmmjpeg.so \
-  vendor/htc/villec2/proprietary/lib/libmmstillomx.so:system/lib/libmmstillomx.so \
+  vendor/htc/villec2/proprietary/lib/libmmmpo.so:system/lib/libmmmpo.so \
+  vendor/htc/villec2/proprietary/lib/libmmstereo.so:system/lib/libmmstereo.so \
   vendor/htc/villec2/proprietary/lib/liboemcamera.so:system/lib/liboemcamera.so \
-  vendor/htc/villec2/proprietary/lib/libOlaEngineNew.so:system/lib/libOlaEngineNew.so \
+  vendor/htc/villec2/proprietary/lib/libOlaEngine.so:system/lib/libOlaEngine.so \
   vendor/htc/villec2/proprietary/lib/libposteffect.so:system/lib/libposteffect.so \
   vendor/htc/villec2/proprietary/lib/libchromatix_s5k3h2yx_default_video.so:system/lib/libchromatix_s5k3h2yx_default_video.so \
   vendor/htc/villec2/proprietary/lib/libchromatix_s5k3h2yx_hdr.so:system/lib/libchromatix_s5k3h2yx_hdr.so \
