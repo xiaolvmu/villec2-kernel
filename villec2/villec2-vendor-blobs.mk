@@ -19,7 +19,7 @@ PRODUCT_COPY_FILES += \
 	vendor/htc/villec2/proprietary/lib/libacdbloader.so:obj/lib/libacdbloader.so \
 	vendor/htc/villec2/proprietary/lib/libacdbmapper.so:obj/lib/libacdbmapper.so \
 	vendor/htc/villec2/proprietary/lib/libaudioalsa.so:obj/lib/libaudioalsa.so \
-	vendor/htc/villec2/proprietary/lib/libmmjpeg.so:obj/lib/lib/libmmjpeg.so
+	vendor/htc/villec2/proprietary/lib/libmmjpeg.so:obj/lib/libmmjpeg.so
 
 PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/lib/libacdbloader.so:system/lib/libacdbloader.so \
