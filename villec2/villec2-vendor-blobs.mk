@@ -107,4 +107,24 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/lib/libmlplatform.so:system/lib/libmlplatform.so \
   vendor/htc/villec2/proprietary/lib/libmpl_jni.so:system/lib/libmpl_jni.so \
   vendor/htc/villec2/proprietary/lib/libmpl.so:system/lib/libmpl.so \
-  vendor/htc/villec2/proprietary/lib/libv8.so:system/lib/libv8.so
+  vendor/htc/villec2/proprietary/lib/libv8.so:system/lib/libv8.so  \
+  vendor/htc/villec2/legacy/hw/audio.primary.msm8660.so:system/lib/hw/audio.primary.msm8660.so \
+  vendor/htc/villec2/legacy/hw/audio_policy.msm8660.so:system/lib/hw/audio_policy.msm8660.so \
+  vendor/htc/villec2/legacy/hw/camera.msm8660.so:system/lib/hw/camera.msm8660.so \
+  vendor/htc/villec2/legacy/hw/copybit.msm8660.so:system/lib/hw/copybit.msm8660.so \
+  vendor/htc/villec2/legacy/hw/gralloc.msm8660.so:system/lib/hw/gralloc.msm8660.so \
+  vendor/htc/villec2/legacy/hw/hwcomposer.msm8660.so:system/lib/hw/hwcomposer.msm8660.so \
+  vendor/htc/villec2/legacy/libdivxdrmdecrypt.so:system/lib/libdivxdrmdecrypt.so              \
+  vendor/htc/villec2/legacy/libgenlock.so:system/lib/libgenlock.so              \
+  vendor/htc/villec2/legacy/libhwcexternal.so:system/lib/libhwcexternal.so               \
+  vendor/htc/villec2/legacy/libhwcservice.so:system/lib/libhwcservice.so                 \
+  vendor/htc/villec2/legacy/libmemalloc.so:system/lib/libmemalloc.so            \
+  vendor/htc/villec2/legacy/libmm-omxcore.so:system/lib/libmm-omxcore.so             \
+  vendor/htc/villec2/legacy/libOmxCore.so:system/lib/libOmxCore.so                \
+  vendor/htc/villec2/legacy/libOmxVdec.so:system/lib/libOmxVdec.so              \
+  vendor/htc/villec2/legacy/libOmxVenc.so:system/lib/libOmxVenc.so                \
+  vendor/htc/villec2/legacy/liboverlay.so:system/lib/liboverlay.so               \
+  vendor/htc/villec2/legacy/libqdutils.so:system/lib/libqdutils.so                  \
+  vendor/htc/villec2/legacy/libselinux.so:system/lib/libselinux.so                  \
+  vendor/htc/villec2/legacy/libstagefrighthw.so:system/lib/libstagefrighthw.so
+
