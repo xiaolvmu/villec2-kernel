@@ -2638,5 +2638,11 @@ config IO_FOOTPRINT
 	default n
 	help
 	  Provides support for light-weight tracing of CPU register read/write
+
+config HAS_MACH_MEMUTILS
+	default n
+	bool "Motorola MSM memcpy enhancements"
+	help
+	Faster memcpy performance for Krait
 endif
 
