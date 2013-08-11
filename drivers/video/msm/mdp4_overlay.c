@@ -2691,9 +2691,7 @@ void mdp4_overlay_mdp_perf_upd(struct msm_fb_data_type *mfd,
 
 	if (flag) {
 		if (perf_req->mdp_clk_rate > perf_cur->mdp_clk_rate) {
-#ifdef CONFIG_ARCH_MSM8X60
-			perf_req->mdp_clk_rate = 160000000;
-#endif
+			perf_req->mdp_clk_rate = 200000000;
 			mdp_set_core_clk(perf_req->mdp_clk_rate);
 			pr_info("%s mdp clk is changed [%d] from %d to %d\n",
 				__func__,
@@ -2741,18 +2739,17 @@ void mdp4_overlay_mdp_perf_upd(struct msm_fb_data_type *mfd,
 			perf_cur->use_ov1_blt = perf_req->use_ov1_blt;
 		}
 	} else {
-#ifndef CONFIG_ARCH_MSM8X60
 		if (perf_req->mdp_clk_rate < perf_cur->mdp_clk_rate) {
 			pr_info("%s mdp clk is changed [%d] from %d to %d\n",
 				__func__,
 				flag,
 				perf_cur->mdp_clk_rate,
 				perf_req->mdp_clk_rate);
-			mdp_set_core_clk(perf_req->mdp_clk_rate);
+
 			perf_cur->mdp_clk_rate =
 				perf_req->mdp_clk_rate;
 		}
-#endif
+
 		if (perf_req->mdp_bw > perf_cur->mdp_bw) {
 			pr_info("%s mdp bw is changed [%d] from %d to %d\n",
 				__func__,
