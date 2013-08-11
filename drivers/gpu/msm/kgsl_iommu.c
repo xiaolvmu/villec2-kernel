@@ -445,9 +445,6 @@ static int kgsl_iommu_init_sync_lock(struct kgsl_mmu *mmu)
 		return -ENXIO;
 	}
 
-	
-	lock_phy_addr = (msm_iommu_lock_initialize()
-			- MSM_SHARED_RAM_BASE + msm_shared_ram_phys);
 
 	if (!lock_phy_addr) {
 		KGSL_DRV_ERR(mmu->device,
@@ -1031,7 +1028,7 @@ static void kgsl_iommu_default_setstate(struct kgsl_mmu *mmu,
 
 	
 	
-	msm_iommu_lock();
+	
 
 	if (flags & KGSL_MMUFLAGS_PTUPDATE) {
 		if (!msm_soc_version_supports_iommu_v1())
@@ -1060,7 +1057,7 @@ static void kgsl_iommu_default_setstate(struct kgsl_mmu *mmu,
 	}
 
 	
-	msm_iommu_unlock();
+	
 
 	
 	kgsl_iommu_disable_clk_on_ts(mmu, 0, false);

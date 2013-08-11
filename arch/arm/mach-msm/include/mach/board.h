@@ -50,6 +50,10 @@ struct msm_camera_io_clk {
 	uint32_t vfe_clk_rate;
 };
 
+void *msm_iommu_lock_initialize(void);
+void msm_iommu_mutex_lock(void);
+void msm_iommu_mutex_unlock(void);
+
 struct msm_cam_expander_info {
 	struct i2c_board_info const *board_info;
 	int bus_id;
