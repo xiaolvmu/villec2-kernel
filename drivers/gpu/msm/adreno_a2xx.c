@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1298,7 +1298,7 @@ static void a2xx_drawctxt_save(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = &adreno_dev->dev;
 
-	if (context == NULL)
+	if (context == NULL || (context->flags & CTXT_FLAGS_BEING_DESTROYED))
 		return;
 
 	if (context->flags & CTXT_FLAGS_GPU_HANG)
@@ -1474,22 +1474,6 @@ static void a2xx_cp_intrcallback(struct kgsl_device *device)
 		return;
 	}
 
-	if (status & CP_INT_CNTL__RB_INT_MASK) {
-		
-		unsigned int context_id;
-		kgsl_sharedmem_readl(&device->memstore,
-				&context_id,
-				KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
-					current_context));
-		if (context_id < KGSL_MEMSTORE_MAX) {
-			kgsl_sharedmem_writel(&rb->device->memstore,
-					KGSL_MEMSTORE_OFFSET(context_id,
-						ts_cmp_enable), 0);
-			wmb();
-		}
-		KGSL_CMD_WARN(rb->device, "ringbuffer rb interrupt\n");
-	}
-
 	for (i = 0; i < ARRAY_SIZE(kgsl_cp_error_irqs); i++) {
 		if (status & kgsl_cp_error_irqs[i].mask) {
 			KGSL_CMD_CRIT(rb->device, "%s\n",
@@ -1590,14 +1574,32 @@ static void a2xx_irq_control(struct adreno_device *adreno_dev, int state)
 	wmb();
 }
 
+static unsigned int a2xx_irq_pending(struct adreno_device *adreno_dev)
+{
+	struct kgsl_device *device = &adreno_dev->dev;
+	unsigned int status;
+
+	adreno_regread(device, REG_MASTER_INT_SIGNAL, &status);
+
+	return (status &
+		(MASTER_INT_SIGNAL__MH_INT_STAT |
+		 MASTER_INT_SIGNAL__CP_INT_STAT |
+		 MASTER_INT_SIGNAL__RBBM_INT_STAT)) ? 1 : 0;
+}
+
 static void a2xx_rb_init(struct adreno_device *adreno_dev,
 			struct adreno_ringbuffer *rb)
 {
 	unsigned int *cmds, cmds_gpu;
 
 	
-	cmds = adreno_ringbuffer_allocspace(rb, 19);
+	cmds = adreno_ringbuffer_allocspace(rb, NULL, 19);
 	cmds_gpu = rb->buffer_desc.gpuaddr + sizeof(uint)*(rb->wptr-19);
+
+	if(cmds == NULL || cmds_gpu == 0){
+		KGSL_PWR_ERR(rb->device,"cmds or cmds_gpu is NULL");
+		return;
+	}
 
 	GSL_RB_WRITE(cmds, cmds_gpu, cp_type3_packet(CP_ME_INIT, 18));
 	
@@ -1721,7 +1723,7 @@ static void a2xx_start(struct adreno_device *adreno_dev)
 			0x18000000);
 	}
 
-	if (adreno_is_a203(adreno_dev))
+	if (adreno_is_a20x(adreno_dev))
 		adreno_regwrite(device, REG_RBBM_CNTL, 0x0000FFFF);
 	else
 		adreno_regwrite(device, REG_RBBM_CNTL, 0x00004442);
@@ -1763,6 +1765,7 @@ struct adreno_gpudev adreno_a2xx_gpudev = {
 	.ctxt_draw_workaround = a2xx_drawctxt_draw_workaround,
 	.irq_handler = a2xx_irq_handler,
 	.irq_control = a2xx_irq_control,
+	.irq_pending = a2xx_irq_pending,
 	.snapshot = a2xx_snapshot,
 	.rb_init = a2xx_rb_init,
 	.busy_cycles = a2xx_busy_cycles,

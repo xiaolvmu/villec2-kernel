@@ -22,7 +22,7 @@
 #include <asm/mach/mmc.h>
 #include <asm/clkdev.h>
 #include <linux/msm_adc.h>
-#include <linux/msm_kgsl.h>
+#include <mach/kgsl.h>
 #include <linux/msm_rotator.h>
 #include <mach/msm_hsusb.h>
 #include "footswitch.h"

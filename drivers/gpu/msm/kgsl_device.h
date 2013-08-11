@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,10 +22,12 @@
 #include "kgsl_pwrctrl.h"
 #include "kgsl_log.h"
 #include "kgsl_pwrscale.h"
+#include <linux/sync.h>
 
-#define KGSL_TIMEOUT_NONE       0
-#define KGSL_TIMEOUT_DEFAULT    0xFFFFFFFF
-#define KGSL_TIMEOUT_PART       2000 
+#define KGSL_TIMEOUT_NONE           0
+#define KGSL_TIMEOUT_DEFAULT        0xFFFFFFFF
+#define KGSL_TIMEOUT_PART           50 
+#define KGSL_TIMEOUT_LONG_IB_DETECTION  2000 
 
 #define FIRST_TIMEOUT (HZ / 2)
 
@@ -38,7 +40,7 @@
 #define KGSL_STATE_SLEEP	0x00000008
 #define KGSL_STATE_SUSPEND	0x00000010
 #define KGSL_STATE_HUNG		0x00000020
-#define KGSL_STATE_DUMP_AND_RECOVER	0x00000040
+#define KGSL_STATE_DUMP_AND_FT	0x00000040
 #define KGSL_STATE_SLUMBER	0x00000080
 
 #define KGSL_GRAPHICS_MEMORY_LOW_WATERMARK  0x1000000
@@ -50,6 +52,7 @@ struct platform_device;
 struct kgsl_device_private;
 struct kgsl_context;
 struct kgsl_power_stats;
+struct kgsl_event;
 
 struct kgsl_functable {
 	void (*regread) (struct kgsl_device *device,
@@ -96,6 +99,9 @@ struct kgsl_functable {
 	int (*setproperty) (struct kgsl_device *device,
 		enum kgsl_property_type type, void *value,
 		unsigned int sizebytes);
+	int (*postmortem_dump) (struct kgsl_device *device, int manual);
+	int (*next_event)(struct kgsl_device *device,
+		struct kgsl_event *event);
 };
 
 struct kgsl_mh {
@@ -113,6 +119,7 @@ struct kgsl_event {
 	void *priv;
 	struct list_head list;
 	void *owner;
+	unsigned int created;
 };
 
 struct kgsl_gpubusy {
@@ -153,7 +160,7 @@ struct kgsl_device {
 	wait_queue_head_t wait_queue;
 	struct workqueue_struct *work_queue;
 	struct device *parentdev;
-	struct completion recovery_gate;
+	struct completion ft_gate;
 	struct dentry *d_debugfs;
 	struct idr context_idr;
 	struct early_suspend display_off;
@@ -163,8 +170,8 @@ struct kgsl_device {
 	int snapshot_size;      
 	u32 snapshot_timestamp;	
 	int snapshot_frozen;	
-	int snapshot_no_panic;	
 	struct kobject snapshot_kobj;
+	int snapshot_no_panic;  
 
 	struct list_head snapshot_obj_list;
 
@@ -174,12 +181,19 @@ struct kgsl_device {
 	int drv_log;
 	int mem_log;
 	int pwr_log;
+	int ft_log;
+	int pm_dump_enable;
 	struct kgsl_pwrscale pwrscale;
 	struct kobject pwrscale_kobj;
 	struct pm_qos_request pm_qos_req_dma;
 	struct work_struct ts_expired_ws;
 	struct list_head events;
+	struct list_head events_pending_list;
 	s64 on_time;
+
+	
+	int pm_regs_enabled;
+	int pm_ib_enabled;
 
 	
 	struct kgsl_gpubusy gputime;
@@ -187,40 +201,40 @@ struct kgsl_device {
 #ifdef CONFIG_MSM_KGSL_GPU_USAGE
 	struct kgsl_process_private *current_process_priv;
 #endif
-#if defined(CONFIG_MSM_KGSL_GPU_USAGE_SYSTRACE)
-	int prev_pid;
-#endif
 };
 
-void kgsl_timestamp_expired(struct work_struct *work);
+void kgsl_process_events(struct work_struct *work);
+void kgsl_check_fences(struct work_struct *work);
 
 #define KGSL_DEVICE_COMMON_INIT(_dev) \
 	.hwaccess_gate = COMPLETION_INITIALIZER((_dev).hwaccess_gate),\
 	.suspend_gate = COMPLETION_INITIALIZER((_dev).suspend_gate),\
-	.recovery_gate = COMPLETION_INITIALIZER((_dev).recovery_gate),\
+	.ft_gate = COMPLETION_INITIALIZER((_dev).ft_gate),\
 	.ts_notifier_list = ATOMIC_NOTIFIER_INIT((_dev).ts_notifier_list),\
 	.idle_check_ws = __WORK_INITIALIZER((_dev).idle_check_ws,\
 			kgsl_idle_check),\
 	.ts_expired_ws  = __WORK_INITIALIZER((_dev).ts_expired_ws,\
-			kgsl_timestamp_expired),\
+			kgsl_process_events),\
 	.context_idr = IDR_INIT((_dev).context_idr),\
 	.events = LIST_HEAD_INIT((_dev).events),\
+	.events_pending_list = LIST_HEAD_INIT((_dev).events_pending_list), \
 	.wait_queue = __WAIT_QUEUE_HEAD_INITIALIZER((_dev).wait_queue),\
 	.mutex = __MUTEX_INITIALIZER((_dev).mutex),\
 	.state = KGSL_STATE_INIT,\
 	.ver_major = DRIVER_VERSION_MAJOR,\
 	.ver_minor = DRIVER_VERSION_MINOR
 
+
 struct kgsl_context {
 	struct kref refcount;
 	uint32_t id;
-
-	
 	struct kgsl_device_private *dev_priv;
-
-	
 	void *devctxt;
 	unsigned int reset_status;
+	bool wait_on_invalid_ts;
+	struct sync_timeline *timeline;
+	struct list_head events;
+	struct list_head events_list;
 };
 
 struct kgsl_process_private {
@@ -231,16 +245,20 @@ struct kgsl_process_private {
 	struct kgsl_pagetable *pagetable;
 	struct list_head list;
 	struct kobject kobj;
+	struct dentry *debug_root;
 
 	struct {
 		unsigned int cur;
 		unsigned int max;
 	} stats[KGSL_MEM_ENTRY_MAX];
+
 #ifdef CONFIG_MSM_KGSL_GPU_USAGE
 	struct kgsl_gpubusy gputime;
 	struct kgsl_gpubusy gputime_in_state[KGSL_MAX_PWRLEVELS];
 #endif
 };
+
+
 
 struct kgsl_device_private {
 	struct kgsl_device *device;
@@ -253,6 +271,7 @@ struct kgsl_power_stats {
 };
 
 struct kgsl_device *kgsl_get_device(int dev_idx);
+void kgsl_dump_contextpid(struct idr *context_idr);
 
 static inline void kgsl_process_add_stats(struct kgsl_process_private *priv,
 	unsigned int type, size_t size)
@@ -397,6 +416,18 @@ static inline void
 kgsl_context_put(struct kgsl_context *context)
 {
 	kref_put(&context->refcount, kgsl_context_destroy);
+}
+
+static inline void
+kgsl_active_count_put(struct kgsl_device *device)
+{
+	if (device->active_cnt == 1)
+		INIT_COMPLETION(device->suspend_gate);
+
+	device->active_cnt--;
+
+	if (device->active_cnt == 0)
+		complete(&device->suspend_gate);
 }
 
 #endif  

@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -121,6 +121,7 @@ int adreno_drawctxt_create(struct kgsl_device *device,
 {
 	struct adreno_context *drawctxt;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct adreno_ringbuffer *rb = &adreno_dev->ringbuffer;
 	int ret;
 
 	drawctxt = kzalloc(sizeof(struct adreno_context), GFP_KERNEL);
@@ -128,9 +129,12 @@ int adreno_drawctxt_create(struct kgsl_device *device,
 	if (drawctxt == NULL)
 		return -ENOMEM;
 
+	drawctxt->pid = task_pid_nr(current);
+	strlcpy(drawctxt->pid_name, current->comm, TASK_COMM_LEN);
 	drawctxt->pagetable = pagetable;
 	drawctxt->bin_base_offset = 0;
 	drawctxt->id = context->id;
+	rb->timestamp[context->id] = 0;
 
 	if (flags & KGSL_CONTEXT_PREAMBLE)
 		drawctxt->flags |= CTXT_FLAGS_PREAMBLE;
@@ -141,6 +145,17 @@ int adreno_drawctxt_create(struct kgsl_device *device,
 	if (flags & KGSL_CONTEXT_PER_CONTEXT_TS)
 		drawctxt->flags |= CTXT_FLAGS_PER_CONTEXT_TS;
 
+	if (flags & KGSL_CONTEXT_USER_GENERATED_TS) {
+		if (!(flags & KGSL_CONTEXT_PER_CONTEXT_TS)) {
+			ret = -EINVAL;
+			goto err;
+		}
+		drawctxt->flags |= CTXT_FLAGS_USER_GENERATED_TS;
+	}
+
+	if (flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE)
+		drawctxt->flags |= CTXT_FLAGS_NO_FAULT_TOLERANCE;
+
 	ret = adreno_dev->gpudev->ctxt_create(adreno_dev, drawctxt);
 	if (ret)
 		goto err;
@@ -148,6 +163,12 @@ int adreno_drawctxt_create(struct kgsl_device *device,
 	kgsl_sharedmem_writel(&device->memstore,
 			KGSL_MEMSTORE_OFFSET(drawctxt->id, ref_wait_ts),
 			KGSL_INIT_REFTIMESTAMP);
+	kgsl_sharedmem_writel(&device->memstore,
+			KGSL_MEMSTORE_OFFSET(drawctxt->id, ts_cmp_enable), 0);
+	kgsl_sharedmem_writel(&device->memstore,
+			KGSL_MEMSTORE_OFFSET(drawctxt->id, soptimestamp), 0);
+	kgsl_sharedmem_writel(&device->memstore,
+			KGSL_MEMSTORE_OFFSET(drawctxt->id, eoptimestamp), 0);
 
 	context->devctxt = drawctxt;
 	return 0;
@@ -174,9 +195,13 @@ void adreno_drawctxt_destroy(struct kgsl_device *device,
 				     CTXT_FLAGS_SHADER_SAVE |
 				     CTXT_FLAGS_GMEM_SHADOW |
 				     CTXT_FLAGS_STATE_SHADOW);
+
+		drawctxt->flags |= CTXT_FLAGS_BEING_DESTROYED;
+
 #ifdef CONFIG_MSM_KGSL_GPU_USAGE
 		device->current_process_priv = NULL;
 #endif
+
 		adreno_drawctxt_switch(adreno_dev, NULL, 0);
 	}
 

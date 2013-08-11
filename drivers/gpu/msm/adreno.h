@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,6 +17,7 @@
 #include "adreno_drawctxt.h"
 #include "adreno_ringbuffer.h"
 #include "kgsl_iommu.h"
+#include <mach/ocmem.h>
 
 #define DEVICE_3D_NAME "kgsl-3d"
 #define DEVICE_3D0_NAME "kgsl-3d0"
@@ -24,14 +25,22 @@
 #define ADRENO_DEVICE(device) \
 		KGSL_CONTAINER_OF(device, struct adreno_device, dev)
 
+#define ADRENO_CHIPID_CORE(_id) (((_id) >> 24) & 0xFF)
+#define ADRENO_CHIPID_MAJOR(_id) (((_id) >> 16) & 0xFF)
+#define ADRENO_CHIPID_MINOR(_id) (((_id) >> 8) & 0xFF)
+#define ADRENO_CHIPID_PATCH(_id) ((_id) & 0xFF)
+
 #define KGSL_CMD_FLAGS_NONE             0x00000000
 #define KGSL_CMD_FLAGS_PMODE		0x00000001
-#define KGSL_CMD_FLAGS_NO_TS_CMP	0x00000002
+#define KGSL_CMD_FLAGS_INTERNAL_ISSUE	0x00000002
+#define KGSL_CMD_FLAGS_EOF	        0x00000100
 
 #define KGSL_CONTEXT_TO_MEM_IDENTIFIER	0x2EADBEEF
 #define KGSL_CMD_IDENTIFIER		0x2EEDFACE
 #define KGSL_START_OF_IB_IDENTIFIER	0x2EADEABE
 #define KGSL_END_OF_IB_IDENTIFIER	0x2ABEDEAD
+#define KGSL_END_OF_FRAME_IDENTIFIER	0x2E0F2E0F
+#define KGSL_NOP_IB_IDENTIFIER	        0x20F20F20
 
 #ifdef CONFIG_MSM_SCM
 #define ADRENO_DEFAULT_PWRSCALE_POLICY  (&kgsl_pwrscale_policy_tz)
@@ -40,6 +49,8 @@
 #else
 #define ADRENO_DEFAULT_PWRSCALE_POLICY  NULL
 #endif
+
+void adreno_debugfs_init(struct kgsl_device *device);
 
 #define ADRENO_ISTORE_START 0x5000 
 
@@ -57,6 +68,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A225 = 225,
 	ADRENO_REV_A305 = 305,
 	ADRENO_REV_A320 = 320,
+	ADRENO_REV_A330 = 330,
 };
 
 struct adreno_gpudev;
@@ -85,7 +97,15 @@ struct adreno_device {
 	unsigned int instruction_size;
 	unsigned int ib_check_level;
 	unsigned int fast_hang_detect;
+	unsigned int ft_policy;
+	unsigned int ft_user_control;
+	unsigned int long_ib_detect;
+	unsigned int long_ib;
+	unsigned int long_ib_ts;
+	unsigned int ft_pf_policy;
 	unsigned int gpulist_index;
+	struct ocmem_buf *ocmem_hdl;
+	unsigned int ocmem_base;
 };
 
 struct adreno_gpudev {
@@ -103,13 +123,14 @@ struct adreno_gpudev {
 					struct adreno_context *);
 	irqreturn_t (*irq_handler)(struct adreno_device *);
 	void (*irq_control)(struct adreno_device *, int);
+	unsigned int (*irq_pending)(struct adreno_device *);
 	void * (*snapshot)(struct adreno_device *, void *, int *, int);
 	void (*rb_init)(struct adreno_device *, struct adreno_ringbuffer *);
 	void (*start)(struct adreno_device *);
 	unsigned int (*busy_cycles)(struct adreno_device *);
 };
 
-struct adreno_recovery_data {
+struct adreno_ft_data {
 	unsigned int ib1;
 	unsigned int context_id;
 	unsigned int global_eop;
@@ -117,7 +138,14 @@ struct adreno_recovery_data {
 	unsigned int rb_size;
 	unsigned int *bad_rb_buffer;
 	unsigned int bad_rb_size;
+	unsigned int *good_rb_buffer;
+	unsigned int good_rb_size;
 	unsigned int last_valid_ctx_id;
+	unsigned int status;
+	unsigned int ft_policy;
+	unsigned int err_code;
+	unsigned int start_of_replay_cmds;
+	unsigned int replay_for_snapshot;
 };
 
 extern struct adreno_gpudev adreno_a2xx_gpudev;
@@ -136,8 +164,11 @@ extern const unsigned int a3xx_registers_count;
 extern const unsigned int a3xx_hlsq_registers[];
 extern const unsigned int a3xx_hlsq_registers_count;
 
-extern unsigned int hang_detect_regs[];
-extern const unsigned int hang_detect_regs_count;
+extern const unsigned int a330_registers[];
+extern const unsigned int a330_registers_count;
+
+extern unsigned int ft_detect_regs[];
+extern const unsigned int ft_detect_regs_count;
 
 
 int adreno_idle(struct kgsl_device *device);
@@ -145,6 +176,8 @@ void adreno_regread(struct kgsl_device *device, unsigned int offsetwords,
 				unsigned int *value);
 void adreno_regwrite(struct kgsl_device *device, unsigned int offsetwords,
 				unsigned int value);
+
+int adreno_dump(struct kgsl_device *device, int manual);
 
 struct kgsl_memdesc *adreno_find_region(struct kgsl_device *device,
 						unsigned int pt_base,
@@ -160,9 +193,12 @@ struct kgsl_memdesc *adreno_find_ctxtmem(struct kgsl_device *device,
 void *adreno_snapshot(struct kgsl_device *device, void *snapshot, int *remain,
 		int hang);
 
-int adreno_dump_and_recover(struct kgsl_device *device);
+int adreno_dump_and_exec_ft(struct kgsl_device *device);
 
-unsigned int adreno_hang_detect(struct kgsl_device *device,
+void adreno_dump_rb(struct kgsl_device *device, const void *buf,
+			 size_t len, int start, int size);
+
+unsigned int adreno_ft_detect(struct kgsl_device *device,
 						unsigned int *prev_reg_val);
 
 static inline int adreno_is_a200(struct adreno_device *adreno_dev)
@@ -221,6 +257,11 @@ static inline int adreno_is_a320(struct adreno_device *adreno_dev)
 	return (adreno_dev->gpurev == ADRENO_REV_A320);
 }
 
+static inline int adreno_is_a330(struct adreno_device *adreno_dev)
+{
+	return (adreno_dev->gpurev == ADRENO_REV_A330);
+}
+
 static inline int adreno_rb_ctxtswitch(unsigned int *cmd)
 {
 	return (cmd[0] == cp_nop_packet(1) &&
@@ -255,7 +296,6 @@ static inline int adreno_add_change_mh_phys_limit_cmds(unsigned int *cmds,
 {
 	unsigned int *start = cmds;
 
-	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
 	*cmds++ = cp_type0_packet(MH_MMU_MPU_END, 1);
 	*cmds++ = new_phys_limit;
 	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
@@ -268,7 +308,6 @@ static inline int adreno_add_bank_change_cmds(unsigned int *cmds,
 {
 	unsigned int *start = cmds;
 
-	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
 	*cmds++ = cp_type0_packet(REG_CP_STATE_DEBUG_INDEX, 1);
 	*cmds++ = (cur_ctx_bank ? 0 : 0x20);
 	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);

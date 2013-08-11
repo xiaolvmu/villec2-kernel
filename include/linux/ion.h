@@ -410,14 +410,26 @@ struct ion_flag_data {
 
 #define ION_IOC_CUSTOM		_IOWR(ION_IOC_MAGIC, 6, struct ion_custom_data)
 
+#define ION_IOC_CLEAN_CACHES_OLD	_IOWR(ION_IOC_MAGIC, 7, \
+						struct ion_flush_data)
+#define ION_IOC_INV_CACHES_OLD	_IOWR(ION_IOC_MAGIC, 8, \
+						struct ion_flush_data)
+#define ION_IOC_CLEAN_INV_CACHES_OLD	_IOWR(ION_IOC_MAGIC, 9, \
+						struct ion_flush_data)
 
-#define ION_IOC_CLEAN_CACHES	_IOWR(ION_IOC_MAGIC, 7, \
-						struct ion_flush_data)
-#define ION_IOC_INV_CACHES	_IOWR(ION_IOC_MAGIC, 8, \
-						struct ion_flush_data)
-#define ION_IOC_CLEAN_INV_CACHES	_IOWR(ION_IOC_MAGIC, 9, \
-						struct ion_flush_data)
-
-#define ION_IOC_GET_FLAGS		_IOWR(ION_IOC_MAGIC, 10, \
+#define ION_IOC_GET_FLAGS_OLD		_IOWR(ION_IOC_MAGIC, 10, \
 						struct ion_flag_data)
+
+#define ION_IOC_MSM_MAGIC 'M'
+
+#define ION_IOC_CLEAN_CACHES	_IOWR(ION_IOC_MSM_MAGIC, 0, \
+						struct ion_flush_data)
+#define ION_IOC_INV_CACHES	_IOWR(ION_IOC_MSM_MAGIC, 1, \
+						struct ion_flush_data)
+#define ION_IOC_CLEAN_INV_CACHES	_IOWR(ION_IOC_MSM_MAGIC, 2, \
+						struct ion_flush_data)
+
+#define ION_IOC_GET_FLAGS		_IOWR(ION_IOC_MSM_MAGIC, 3, \
+						struct ion_flag_data)
+
 #endif 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -72,6 +72,13 @@ const unsigned int a3xx_hlsq_registers[] = {
 
 const unsigned int a3xx_hlsq_registers_count =
 			ARRAY_SIZE(a3xx_hlsq_registers) / 2;
+
+
+const unsigned int a330_registers[] = {
+	0x1d0, 0x1d0, 0x1d4, 0x1d4, 0x453, 0x453,
+};
+
+const unsigned int a330_registers_count = ARRAY_SIZE(a330_registers) / 2;
 
 
 #define _SET(_shift, _val) ((_val) << (_shift))
@@ -2139,7 +2146,7 @@ static void a3xx_drawctxt_save(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = &adreno_dev->dev;
 
-	if (context == NULL)
+	if (context == NULL || (context->flags & CTXT_FLAGS_BEING_DESTROYED))
 		return;
 
 	if (context->flags & CTXT_FLAGS_GPU_HANG)
@@ -2239,7 +2246,7 @@ static void a3xx_rb_init(struct adreno_device *adreno_dev,
 			 struct adreno_ringbuffer *rb)
 {
 	unsigned int *cmds, cmds_gpu;
-	cmds = adreno_ringbuffer_allocspace(rb, 18);
+	cmds = adreno_ringbuffer_allocspace(rb, NULL, 18);
 	cmds_gpu = rb->buffer_desc.gpuaddr + sizeof(uint) * (rb->wptr - 18);
 
 	GSL_RB_WRITE(cmds, cmds_gpu, cp_type3_packet(CP_ME_INIT, 17));
@@ -2336,20 +2343,7 @@ static void a3xx_cp_callback(struct adreno_device *adreno_dev, int irq)
 {
 	struct kgsl_device *device = &adreno_dev->dev;
 
-	if (irq == A3XX_INT_CP_RB_INT) {
-		unsigned int context_id;
-		kgsl_sharedmem_readl(&device->memstore, &context_id,
-				KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
-					current_context));
-		if (context_id < KGSL_MEMSTORE_MAX) {
-			kgsl_sharedmem_writel(&device->memstore,
-					KGSL_MEMSTORE_OFFSET(context_id,
-						ts_cmp_enable), 0);
-			wmb();
-		}
-		KGSL_CMD_WARN(device, "ringbuffer rb interrupt\n");
-	}
-
+	
 	wake_up_interruptible_all(&device->wait_queue);
 
 	
@@ -2448,6 +2442,15 @@ static void a3xx_irq_control(struct adreno_device *adreno_dev, int state)
 		adreno_regwrite(device, A3XX_RBBM_INT_0_MASK, 0);
 }
 
+static unsigned int a3xx_irq_pending(struct adreno_device *adreno_dev)
+{
+	unsigned int status;
+
+	adreno_regread(&adreno_dev->dev, A3XX_RBBM_INT_0_STATUS, &status);
+
+	return (status & A3XX_INT_MASK) ? 1 : 0;
+}
+
 static unsigned int a3xx_busy_cycles(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = &adreno_dev->dev;
@@ -2519,6 +2522,31 @@ static struct a3xx_vbif_data a320_vbif[] = {
 	{0, 0},
 };
 
+static struct a3xx_vbif_data a330_vbif[] = {
+	
+	{ A3XX_VBIF_IN_RD_LIM_CONF0, 0x18181818 },
+	{ A3XX_VBIF_IN_RD_LIM_CONF1, 0x00001818 },
+	{ A3XX_VBIF_OUT_RD_LIM_CONF0, 0x00001818 },
+	{ A3XX_VBIF_OUT_WR_LIM_CONF0, 0x00001818 },
+	{ A3XX_VBIF_DDR_OUT_MAX_BURST, 0x0000303 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF0, 0x18181818 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF1, 0x00001818 },
+	
+	{ A3XX_VBIF_GATE_OFF_WRREQ_EN, 0x00003F },
+	
+	{ A3XX_VBIF_ARB_CTL, 0x00000030 },
+	
+	{ A3XX_VBIF_ROUND_ROBIN_QOS_ARB, 0x0001 },
+	
+	{ A3XX_VBIF_OUT_AXI_AOOO_EN, 0x0000003F },
+	{ A3XX_VBIF_OUT_AXI_AOOO, 0x003F003F },
+	
+	{ A3XX_VBIF_ABIT_SORT, 0x0001003F },
+	{ A3XX_VBIF_ABIT_SORT_CONF, 0x000000A4 },
+	{ A3XX_VBIF_CLKON, 1 },
+	{0, 0},
+};
+
 static void a3xx_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = &adreno_dev->dev;
@@ -2528,6 +2556,8 @@ static void a3xx_start(struct adreno_device *adreno_dev)
 		vbif = a305_vbif;
 	else if (adreno_is_a320(adreno_dev))
 		vbif = a320_vbif;
+	else if (adreno_is_a330(adreno_dev))
+		vbif = a330_vbif;
 
 	BUG_ON(vbif == NULL);
 
@@ -2557,9 +2587,29 @@ static void a3xx_start(struct adreno_device *adreno_dev)
 			(1 << 16) | 0xFFF);
 
 	
+	adreno_regwrite(device, A3XX_UCHE_CACHE_MODE_CONTROL_REG, 0x00000001);
+
+	
 	adreno_regwrite(device, A3XX_RBBM_CLOCK_CTL,
 			A3XX_RBBM_CLOCK_CTL_DEFAULT);
 
+	
+	if (adreno_is_a330(adreno_dev)) {
+		adreno_regwrite(device, A3XX_RB_GMEM_BASE_ADDR,
+			(unsigned int)(adreno_dev->ocmem_base >> 14));
+	}
+
+	
+	adreno_regwrite(device, A3XX_RBBM_PERFCTR_CTL, 0x01);
+
+	if (adreno_dev->fast_hang_detect) {
+		adreno_regwrite(device, A3XX_SP_PERFCOUNTER5_SELECT,
+			SP_ALU_ACTIVE_CYCLES);
+		adreno_regwrite(device, A3XX_SP_PERFCOUNTER6_SELECT,
+			SP0_ICL1_MISSES);
+		adreno_regwrite(device, A3XX_SP_PERFCOUNTER7_SELECT,
+			SP_FS_CFLOW_INSTRUCTIONS);
+	}
 }
 
 void *a3xx_snapshot(struct adreno_device *adreno_dev, void *snapshot,
@@ -2577,6 +2627,7 @@ struct adreno_gpudev adreno_a3xx_gpudev = {
 	.rb_init = a3xx_rb_init,
 	.irq_control = a3xx_irq_control,
 	.irq_handler = a3xx_irq_handler,
+	.irq_pending = a3xx_irq_pending,
 	.busy_cycles = a3xx_busy_cycles,
 	.start = a3xx_start,
 	.snapshot = a3xx_snapshot,
