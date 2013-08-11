@@ -336,10 +336,6 @@ int ion_carveout_heap_map_iommu(struct ion_buffer *buffer,
 	unsigned long extra;
 	struct scatterlist *sglist = 0;
 	int prot = IOMMU_WRITE | IOMMU_READ;
-	
-	unsigned long temp_phys = 0, temp_iova = 0;
-	int i = 0;
-	
 	prot |= ION_IS_CACHED(flags) ? IOMMU_CACHE : 0;
 
 	data->mapped_size = iova_length;
@@ -348,12 +344,6 @@ int ion_carveout_heap_map_iommu(struct ion_buffer *buffer,
 		data->iova_addr = buffer->priv_phys;
 		return 0;
 	}
-
-	
-	if (buffer->heap->id == ION_CAMERA_HEAP_ID) {
-		align = SZ_1M;
-	}
-	
 
 	extra = iova_length - buffer->size;
 
@@ -380,21 +370,6 @@ int ion_carveout_heap_map_iommu(struct ion_buffer *buffer,
 	sglist->offset = 0;
 	sglist->dma_address = buffer->priv_phys;
 
-	
-	if (buffer->heap->id == ION_CAMERA_HEAP_ID) {
-		temp_iova = data->iova_addr;
-		temp_phys = buffer->priv_phys;
-		for (i = buffer->size; i > 0; i -= SZ_1M, temp_iova += SZ_1M, temp_phys += SZ_1M) {
-			ret = iommu_map(domain, temp_iova, temp_phys, SZ_1M, prot);
-
-			if (ret) {
-				pr_err("%s: could not map %lx to %lx in domain %d partition %d\n", __func__, temp_iova, temp_phys, domain_num, partition_num);
-				goto out2;
-			}
-		}
-	}
-	else
-	
 	ret = iommu_map_range(domain, data->iova_addr, sglist,
 			      buffer->size, prot);
 	if (ret) {
@@ -414,13 +389,6 @@ int ion_carveout_heap_map_iommu(struct ion_buffer *buffer,
 	return ret;
 
 out2:
-	
-	if (buffer->heap->id == ION_CAMERA_HEAP_ID) {
-		for ( ; i < buffer->size; i += SZ_1M, temp_iova -= SZ_1M)
-			iommu_unmap(domain, temp_iova, SZ_1M);
-	}
-	else
-	
 	iommu_unmap_range(domain, data->iova_addr, buffer->size);
 out1:
 	vfree(sglist);
@@ -437,11 +405,6 @@ void ion_carveout_heap_unmap_iommu(struct ion_iommu_map *data)
 	unsigned int domain_num;
 	unsigned int partition_num;
 	struct iommu_domain *domain;
-	
-	unsigned long temp_iova = 0;
-	int i = 0;
-	unsigned long extra = 0;
-	
 
 	if (!msm_use_iommu())
 		return;
@@ -456,20 +419,6 @@ void ion_carveout_heap_unmap_iommu(struct ion_iommu_map *data)
 		return;
 	}
 
-	
-	if (data->buffer->heap->id == ION_CAMERA_HEAP_ID) {
-		extra = data->mapped_size - data->buffer->size;
-
-		temp_iova = data->iova_addr;
-		for (i = data->buffer->size; i > 0; i -= SZ_1M, temp_iova += SZ_1M)
-			iommu_unmap(domain, temp_iova, SZ_1M);
-
-		if (extra) {
-			iommu_unmap_range(domain, temp_iova, extra);
-		}
-	}
-	else
-	
 	iommu_unmap_range(domain, data->iova_addr, data->mapped_size);
 	msm_free_iova_address(data->iova_addr, domain_num, partition_num,
 				data->mapped_size);

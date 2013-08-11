@@ -187,13 +187,6 @@ static struct ion_buffer *ion_buffer_create(struct ion_heap *heap,
 	buffer->heap = heap;
 	kref_init(&buffer->ref);
 
-	
-	if (heap->id == ION_CP_MM_HEAP_ID || heap->id == ION_CAMERA_HEAP_ID) {
-		len = (len + SZ_1M - 1) & ~(SZ_1M - 1);
-		align = SZ_1M;
-	}
-	
-
 	ret = heap->ops->allocate(heap, buffer, len, align, flags);
 	if (ret) {
 		kfree(buffer);
@@ -626,9 +619,11 @@ int ion_map_iommu(struct ion_client *client, struct ion_handle *handle,
 		iova_length = buffer->size;
 
 	if (buffer->size > iova_length) {
-		iova_length = buffer->size;
+		pr_debug("%s: iova length %lx is not at least buffer size"
+			" %x\n", __func__, iova_length, buffer->size);
+		ret = -EINVAL;
+		goto out;
 	}
-	
 
 	if (buffer->size & ~PAGE_MASK) {
 		pr_debug("%s: buffer size %x is not aligned to %lx", __func__,
@@ -967,6 +962,7 @@ struct ion_client *ion_client_create(struct ion_device *dev,
 						 &debug_client_fops);
 	mutex_unlock(&dev->lock);
 
+	pr_info("%s: create ion_client (%s) at %p\n", __func__, client->name, client);
 	return client;
 }
 
@@ -975,7 +971,7 @@ void ion_client_destroy(struct ion_client *client)
 	struct ion_device *dev = client->dev;
 	struct rb_node *n;
 
-	pr_debug("%s: %d\n", __func__, __LINE__);
+	pr_info("%s: destroy ion_client %p (%s)\n", __func__, client, client->name);
 	while ((n = rb_first(&client->handles))) {
 		struct ion_handle *handle = rb_entry(n, struct ion_handle,
 						     node);
@@ -1585,7 +1581,19 @@ void ion_debug_mem_map_create(struct seq_file *s, struct ion_heap *heap,
 			}
 			data->size = buffer->size;
 			data->client_name = ion_debug_locate_owner(dev, buffer);
-			data->creator_name = buffer->creator->name;
+
+			{
+				
+				struct rb_node *p = NULL;
+				struct ion_client *entry = NULL;
+
+				for (p = rb_first(&dev->clients); p && !data->creator_name;
+						p = rb_next(p)) {
+					entry = rb_entry(p, struct ion_client, node);
+					if (entry == buffer->creator)
+						data->creator_name = entry->name;
+				}
+			}
 			ion_debug_mem_map_add(mem_map, data);
 		}
 	}
@@ -1748,7 +1756,7 @@ static int ion_debug_leak_show(struct seq_file *s, void *unused)
 	struct rb_node *n2;
 
 	
-	seq_printf(s, "%16.s %16.s %16.s %16.s\n", "buffer", "heap", "size",
+	seq_printf(s, "%16.s %12.s %16.s %16.s %16.s\n", "buffer", "physical", "heap", "size",
 		"ref cnt");
 	mutex_lock(&dev->lock);
 	for (n = rb_first(&dev->buffers); n; n = rb_next(n)) {
@@ -1779,11 +1787,22 @@ static int ion_debug_leak_show(struct seq_file *s, void *unused)
 	for (n = rb_first(&dev->buffers); n; n = rb_next(n)) {
 		struct ion_buffer *buf = rb_entry(n, struct ion_buffer,
 						     node);
+		enum ion_heap_type type = buf->heap->type;
 
-		if (buf->marked == 1)
-			seq_printf(s, "%16.x %16.s %16.x %16.d\n",
-				(int)buf, buf->heap->name, buf->size,
+		if (buf->marked == 1) {
+			seq_printf(s, "%16.x", (int)buf);
+
+			if (type == ION_HEAP_TYPE_SYSTEM_CONTIG ||
+				type == ION_HEAP_TYPE_CARVEOUT ||
+				type == ION_HEAP_TYPE_CP)
+				seq_printf(s, " %12lx", buf->priv_phys);
+			else
+				seq_printf(s, " %12s", "N/A");
+
+			seq_printf(s, " %16.s %16.x %16.d\n",
+				buf->heap->name, buf->size,
 				atomic_read(&buf->ref.refcount));
+		}
 	}
 	mutex_unlock(&dev->lock);
 	return 0;

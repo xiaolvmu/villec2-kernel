@@ -61,6 +61,55 @@ struct msm_iommu_ctx_drvdata {
 irqreturn_t msm_iommu_fault_handler(int irq, void *dev_id);
 irqreturn_t msm_iommu_fault_handler_v2(int irq, void *dev_id);
 
+enum {
+	PROC_APPS,
+	PROC_GPU,
+	PROC_MAX
+};
+
+struct remote_iommu_petersons_spinlock {
+	uint32_t flag[PROC_MAX];
+	uint32_t turn;
+};
+
+#ifdef CONFIG_MSM_IOMMU
+void *msm_iommu_lock_initialize(void);
+void msm_iommu_mutex_lock(void);
+void msm_iommu_mutex_unlock(void);
+#else
+static inline void *msm_iommu_lock_initialize(void)
+{
+	return NULL;
+}
+static inline void msm_iommu_mutex_lock(void) { }
+static inline void msm_iommu_mutex_unlock(void) { }
+#endif
+
+#ifdef CONFIG_MSM_IOMMU_GPU_SYNC
+void msm_iommu_remote_p0_spin_lock(void);
+void msm_iommu_remote_p0_spin_unlock(void);
+
+#define msm_iommu_remote_lock_init() _msm_iommu_remote_spin_lock_init()
+#define msm_iommu_remote_spin_lock() msm_iommu_remote_p0_spin_lock()
+#define msm_iommu_remote_spin_unlock() msm_iommu_remote_p0_spin_unlock()
+#else
+#define msm_iommu_remote_lock_init()
+#define msm_iommu_remote_spin_lock()
+#define msm_iommu_remote_spin_unlock()
+#endif
+
+#define msm_iommu_lock() \
+	do { \
+		msm_iommu_mutex_lock(); \
+		msm_iommu_remote_spin_lock(); \
+	} while (0)
+
+#define msm_iommu_unlock() \
+	do { \
+		msm_iommu_remote_spin_unlock(); \
+		msm_iommu_mutex_unlock(); \
+	} while (0)
+
 #ifdef CONFIG_MSM_IOMMU
 struct device *msm_iommu_get_ctx(const char *ctx_name);
 #else
