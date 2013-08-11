@@ -107,8 +107,7 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 		if ((test_bit(KGSL_PWRFLAGS_CLK_ON, &pwr->power_flags)) ||
 			(device->state == KGSL_STATE_NAP)) {
 			if (pwr->idle_needed == true)
-				device->ftbl->idle(device,
-						KGSL_TIMEOUT_DEFAULT);
+				device->ftbl->idle(device);
 			while (level != new_level) {
 				level += d;
 				clk_set_rate(pwr->grp_clks[0],
@@ -315,6 +314,26 @@ static int kgsl_pwrctrl_gpubusy_show(struct device *dev,
 	return ret;
 }
 
+static int kgsl_pwrctrl_gpu_available_frequencies_show(
+				struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct kgsl_device *device = kgsl_device_from_dev(dev);
+	struct kgsl_pwrctrl *pwr;
+	int index, num_chars = 0;
+
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
+	for (index = 0; index < pwr->num_pwrlevels - 1; index++)
+		num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",
+		pwr->pwrlevels[index].gpu_freq);
+	buf[num_chars++] = '\n';
+	return num_chars;
+}
+
+
 static int kgsl_pwrctrl_gpubusy_time_show(struct device *dev,
                     struct device_attribute *attr,
                     char *buf)
@@ -435,6 +454,7 @@ DEVICE_ATTR(pwrnap, 0664, kgsl_pwrctrl_pwrnap_show, kgsl_pwrctrl_pwrnap_store);
 DEVICE_ATTR(idle_timer, 0644, kgsl_pwrctrl_idle_timer_show, kgsl_pwrctrl_idle_timer_store);
 DEVICE_ATTR(gputime_in_state, 0444, kgsl_pwrctrl_gputime_in_state_show, NULL);
 DEVICE_ATTR(gpubusy, 0644, kgsl_pwrctrl_gpubusy_show, NULL);
+DEVICE_ATTR(gpu_available_frequencies, 0444,kgsl_pwrctrl_gpu_available_frequencies_show,NULL);
 DEVICE_ATTR(gpubusy_time, 0644, kgsl_pwrctrl_gpubusy_time_show, NULL);
 DEVICE_ATTR(gpubusy_time_in_state, 0644, kgsl_pwrctrl_gpubusy_time_in_state_show, NULL);
 DEVICE_ATTR(init_pwrlevel, 0644, kgsl_pwrctrl_init_pwrlevel_show, kgsl_pwrctrl_init_pwrlevel_store);
@@ -445,6 +465,7 @@ static const struct device_attribute *pwrctrl_attr_list[] = {
 	&dev_attr_pwrnap,
 	&dev_attr_idle_timer,
 	&dev_attr_gpubusy,
+	&dev_attr_gpu_available_frequencies,
 	&dev_attr_gpubusy_time,
 	&dev_attr_gpubusy_time_in_state,
 	&dev_attr_gputime_in_state,
@@ -495,9 +516,11 @@ void kgsl_pwrctrl_clk(struct kgsl_device *device, int state,
 			&pwr->power_flags)) {
 			trace_kgsl_clk(device, state);
 #ifdef CONFIG_MSM_KGSL_GPU_USAGE_SYSTRACE
-			if(device->id == 0)
+			if(device->id == 0) {
 				trace_kgsl_usage(device, state, task_tgid_nr(current), device->gputime.total, device->gputime.busy,
 				pwr->active_pwrlevel, pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq);
+				device->prev_pid= -1;
+			}
 #endif
 			for (i = KGSL_MAX_CLKS - 1; i > 0; i--)
 				if (pwr->grp_clks[i]) {
@@ -523,9 +546,11 @@ void kgsl_pwrctrl_clk(struct kgsl_device *device, int state,
 
 			trace_kgsl_clk(device, state);
 #ifdef CONFIG_MSM_KGSL_GPU_USAGE_SYSTRACE
-			if(device->id == 0)
+			if(device->id == 0) {
 				trace_kgsl_usage(device, state, task_tgid_nr(current), device->gputime.total, device->gputime.busy,
 				pwr->active_pwrlevel, pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq);
+				device->prev_pid = task_tgid_nr(current);
+			}
 #endif
 			
 			if (device->state != KGSL_STATE_NAP) {

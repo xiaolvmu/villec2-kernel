@@ -19,6 +19,7 @@
 #include "kgsl_mmu.h"
 #include <linux/slab.h>
 #include <linux/kmemleak.h>
+#include <linux/sched.h>
 
 struct kgsl_device;
 struct kgsl_process_private;
@@ -151,10 +152,14 @@ kgsl_allocate_user(struct kgsl_memdesc *memdesc,
 		size_t size, unsigned int flags)
 {
 	int ret = 1;
+	char task_comm[TASK_COMM_LEN];
+
 	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_NONE)
 		return kgsl_sharedmem_ebimem_user(memdesc, pagetable, size,
 						  flags);
 	if(size >= SZ_4M)
+		ret = kgsl_sharedmem_ion_alloc_user(memdesc, private, pagetable, size, flags);
+	else if ( size >= SZ_1M && strcmp("om.htc.launcher", get_task_comm(task_comm, current->group_leader)) == 0 )
 		ret = kgsl_sharedmem_ion_alloc_user(memdesc, private, pagetable, size, flags);
 
 	if(ret)

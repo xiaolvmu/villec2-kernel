@@ -256,6 +256,9 @@ void *a3xx_snapshot(struct adreno_device *adreno_dev, void *snapshot,
 	regs.count = a3xx_registers_count;
 
 	
+	adreno_regwrite(device, A3XX_RBBM_CLOCK_CTL, 0x00);
+
+	
 	snapshot = kgsl_snapshot_add_section(device,
 		KGSL_SNAPSHOT_SECTION_REGS, snapshot, remain,
 		kgsl_snapshot_dump_regs, &regs);
@@ -269,9 +272,6 @@ void *a3xx_snapshot(struct adreno_device *adreno_dev, void *snapshot,
 	snapshot = kgsl_snapshot_indexed_registers(device, snapshot,
 			remain, REG_CP_ME_CNTL, REG_CP_ME_STATUS,
 			64, 44);
-
-	
-	adreno_regwrite(device, A3XX_RBBM_CLOCK_CTL, 0x00);
 
 	
 	snapshot = kgsl_snapshot_add_section(device,

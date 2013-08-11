@@ -262,6 +262,42 @@ static void kgsl_snapshot_put_object(struct kgsl_device *device,
 	kfree(obj);
 }
 
+#if 0
+int kgsl_snapshot_have_object(struct kgsl_device *device, unsigned int ptbase,
+	unsigned int gpuaddr, unsigned int size)
+{
+	struct kgsl_snapshot_object *obj;
+
+	list_for_each_entry(obj, &device->snapshot_obj_list, node) {
+		if (obj->ptbase != ptbase)
+			continue;
+
+		if ((gpuaddr >= obj->gpuaddr) &&
+			((gpuaddr + size) <= (obj->gpuaddr + obj->size)))
+			return 1;
+	}
+
+	return 0;
+}
+#endif
+
+int kgsl_snapshot_have_object(struct kgsl_device *device, unsigned int ptbase,
+	unsigned int gpuaddr, unsigned int size)
+{
+	struct kgsl_snapshot_object *obj;
+
+	list_for_each_entry(obj, &device->snapshot_obj_list, node) {
+		if (obj->ptbase != ptbase)
+			continue;
+
+		if ((gpuaddr >= obj->gpuaddr) &&
+			((gpuaddr + size) <= (obj->gpuaddr + obj->size)))
+			return 1;
+	}
+
+	return 0;
+}
+
 
 int kgsl_snapshot_get_object(struct kgsl_device *device, unsigned int ptbase,
 	unsigned int gpuaddr, unsigned int size, unsigned int type)
@@ -412,6 +448,9 @@ int kgsl_device_snapshot(struct kgsl_device *device, int hang)
 	struct kgsl_snapshot_header *header = device->snapshot;
 	int remain = device->snapshot_maxsize - sizeof(*header);
 	void *snapshot;
+	struct platform_device *pdev =
+		container_of(device->parentdev, struct platform_device, dev);
+	struct kgsl_device_platform_data *pdata = pdev->dev.platform_data;
 
 
 	if (hang && device->snapshot_frozen == 1)
@@ -452,8 +491,8 @@ int kgsl_device_snapshot(struct kgsl_device *device, int hang)
 	device->snapshot_frozen = (hang) ? 1 : 0;
 
 	
-	KGSL_DRV_ERR(device, "snapshot created at va %p pa %lx size %d\n",
-			device->snapshot, __pa(device->snapshot),
+	KGSL_DRV_ERR(device,"snapshot created at va %p pa %x size %d\n",
+			device->snapshot, pdata->snapshot_address,
 			device->snapshot_size);
 	if (hang)
 		sysfs_notify(&device->snapshot_kobj, NULL, "timestamp");
@@ -637,9 +676,17 @@ static struct kobj_type ktype_snapshot = {
 int kgsl_device_snapshot_init(struct kgsl_device *device)
 {
 	int ret;
+	struct platform_device *pdev =
+		container_of(device->parentdev, struct platform_device, dev);
+	struct kgsl_device_platform_data *pdata = pdev->dev.platform_data;
 
-	if (device->snapshot == NULL)
-		device->snapshot = kzalloc(KGSL_SNAPSHOT_MEMSIZE, GFP_KERNEL);
+	if (device->snapshot == NULL) {
+		if(pdata->snapshot_address) {
+			device->snapshot = ioremap(pdata->snapshot_address, KGSL_SNAPSHOT_MEMSIZE);
+			KGSL_DRV_INFO(device, "snapshot created at va %p pa %x\n", device->snapshot, pdata->snapshot_address);
+		} else
+			device->snapshot = kzalloc(KGSL_SNAPSHOT_MEMSIZE, GFP_KERNEL);
+	}
 
 	if (device->snapshot == NULL)
 		return -ENOMEM;

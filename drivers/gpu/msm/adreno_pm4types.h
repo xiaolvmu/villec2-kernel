@@ -103,6 +103,10 @@
 
 #define CP_IM_STORE            0x2c
 
+#define CP_TEST_TWO_MEMS    0x71
+
+#define CP_WAIT_FOR_ME      0x13
+
 #define CP_SET_BIN_BASE_OFFSET     0x4B
 
 #define CP_SET_DRAW_INIT_FLAGS      0x4B

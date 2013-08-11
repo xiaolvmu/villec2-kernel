@@ -18,6 +18,9 @@
 #include <linux/iommu.h>
 #include <linux/msm_kgsl.h>
 #include <mach/socinfo.h>
+#include <mach/msm_iomap.h>
+#include <mach/board.h>
+#include <stddef.h>
 
 #include "kgsl.h"
 #include "kgsl_device.h"
@@ -27,6 +30,10 @@
 #include "adreno_pm4types.h"
 #include "adreno.h"
 #include "kgsl_trace.h"
+#include "z180.h"
+
+
+struct remote_iommu_petersons_spinlock kgsl_iommu_sync_lock_vars;
 
 static struct kgsl_iommu_unit *get_iommu_unit(struct device *dev)
 {
@@ -377,6 +384,163 @@ static int _get_iommu_ctxs(struct kgsl_mmu *mmu,
 	return 0;
 }
 
+static int kgsl_iommu_init_sync_lock(struct kgsl_mmu *mmu)
+{
+	struct kgsl_iommu *iommu = mmu->device->mmu.priv;
+	int status = 0;
+	struct kgsl_pagetable *pagetable = NULL;
+	uint32_t lock_gpu_addr = 0;
+	uint32_t lock_phy_addr = 0;
+	uint32_t page_offset = 0;
+
+	iommu->sync_lock_initialized = 0;
+
+	if (!(mmu->flags & KGSL_MMU_FLAGS_IOMMU_SYNC)) {
+		KGSL_DRV_ERR(mmu->device,
+		"The GPU microcode does not support IOMMUv1 sync opcodes\n");
+		return -ENXIO;
+	}
+
+	
+	lock_phy_addr = (msm_iommu_lock_initialize()
+			- MSM_SHARED_RAM_BASE + msm_shared_ram_phys);
+
+	if (!lock_phy_addr) {
+		KGSL_DRV_ERR(mmu->device,
+				"GPU CPU sync lock is not supported by kernel\n");
+		return -ENXIO;
+	}
+
+	
+	page_offset = (lock_phy_addr & (PAGE_SIZE - 1));
+	lock_phy_addr = (lock_phy_addr & ~(PAGE_SIZE - 1));
+	iommu->sync_lock_desc.physaddr = (unsigned int)lock_phy_addr;
+
+	iommu->sync_lock_desc.size =
+				PAGE_ALIGN(sizeof(kgsl_iommu_sync_lock_vars));
+	status =  memdesc_sg_phys(&iommu->sync_lock_desc,
+				 iommu->sync_lock_desc.physaddr,
+				 iommu->sync_lock_desc.size);
+
+	if (status)
+		return status;
+
+	
+	iommu->sync_lock_desc.priv |= KGSL_MEMFLAGS_GLOBAL;
+
+	pagetable = mmu->priv_bank_table ? mmu->priv_bank_table :
+				mmu->defaultpagetable;
+
+	status = kgsl_mmu_map(pagetable, &iommu->sync_lock_desc,
+				     GSL_PT_PAGE_RV | GSL_PT_PAGE_WV);
+
+	if (status) {
+		kgsl_mmu_unmap(pagetable, &iommu->sync_lock_desc);
+		iommu->sync_lock_desc.priv &= ~~KGSL_MEMFLAGS_GLOBAL;
+		return status;
+	}
+
+	
+	lock_gpu_addr = (iommu->sync_lock_desc.gpuaddr + page_offset);
+
+	kgsl_iommu_sync_lock_vars.flag[PROC_APPS] = (lock_gpu_addr +
+		(offsetof(struct remote_iommu_petersons_spinlock,
+			flag[PROC_APPS])));
+	kgsl_iommu_sync_lock_vars.flag[PROC_GPU] = (lock_gpu_addr +
+		(offsetof(struct remote_iommu_petersons_spinlock,
+			flag[PROC_GPU])));
+	kgsl_iommu_sync_lock_vars.turn = (lock_gpu_addr +
+		(offsetof(struct remote_iommu_petersons_spinlock, turn)));
+
+	iommu->sync_lock_vars = &kgsl_iommu_sync_lock_vars;
+
+	
+	iommu->sync_lock_initialized = 1;
+
+	return status;
+}
+
+inline unsigned int kgsl_iommu_sync_lock(struct kgsl_mmu *mmu,
+						unsigned int *cmds)
+{
+	struct kgsl_device *device = mmu->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_iommu *iommu = mmu->device->mmu.priv;
+	struct remote_iommu_petersons_spinlock *lock_vars =
+					iommu->sync_lock_vars;
+	unsigned int *start = cmds;
+
+	if (!iommu->sync_lock_initialized)
+		return 0;
+
+	*cmds++ = cp_type3_packet(CP_MEM_WRITE, 2);
+	*cmds++ = lock_vars->flag[PROC_GPU];
+	*cmds++ = 1;
+
+	cmds += adreno_add_idle_cmds(adreno_dev, cmds);
+
+	*cmds++ = cp_type3_packet(CP_WAIT_REG_MEM, 5);
+	
+	*cmds++ = 0x13;
+	*cmds++ = lock_vars->flag[PROC_GPU];
+	*cmds++ = 0x1;
+	*cmds++ = 0x1;
+	*cmds++ = 0x1;
+
+	*cmds++ = cp_type3_packet(CP_MEM_WRITE, 2);
+	*cmds++ = lock_vars->turn;
+	*cmds++ = 0;
+
+	cmds += adreno_add_idle_cmds(adreno_dev, cmds);
+
+	*cmds++ = cp_type3_packet(CP_WAIT_REG_MEM, 5);
+	
+	*cmds++ = 0x13;
+	*cmds++ = lock_vars->flag[PROC_GPU];
+	*cmds++ = 0x1;
+	*cmds++ = 0x1;
+	*cmds++ = 0x1;
+
+	*cmds++ = cp_type3_packet(CP_TEST_TWO_MEMS, 3);
+	*cmds++ = lock_vars->flag[PROC_APPS];
+	*cmds++ = lock_vars->turn;
+	*cmds++ = 0;
+
+	cmds += adreno_add_idle_cmds(adreno_dev, cmds);
+
+	return cmds - start;
+}
+
+inline unsigned int kgsl_iommu_sync_unlock(struct kgsl_mmu *mmu,
+					unsigned int *cmds)
+{
+	struct kgsl_device *device = mmu->device;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_iommu *iommu = mmu->device->mmu.priv;
+	struct remote_iommu_petersons_spinlock *lock_vars =
+						iommu->sync_lock_vars;
+	unsigned int *start = cmds;
+
+	if (!iommu->sync_lock_initialized)
+		return 0;
+
+	*cmds++ = cp_type3_packet(CP_MEM_WRITE, 2);
+	*cmds++ = lock_vars->flag[PROC_GPU];
+	*cmds++ = 0;
+
+	*cmds++ = cp_type3_packet(CP_WAIT_REG_MEM, 5);
+	
+	*cmds++ = 0x13;
+	*cmds++ = lock_vars->flag[PROC_GPU];
+	*cmds++ = 0x0;
+	*cmds++ = 0x1;
+	*cmds++ = 0x1;
+
+	cmds += adreno_add_idle_cmds(adreno_dev, cmds);
+
+	return cmds - start;
+}
+
 static int kgsl_get_iommu_ctxt(struct kgsl_mmu *mmu)
 {
 	struct platform_device *pdev =
@@ -581,6 +745,7 @@ err:
 
 static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 {
+	struct kgsl_device *device = mmu->device;
 	int status;
 	struct kgsl_iommu *iommu = mmu->priv;
 	int i, j;
@@ -592,7 +757,13 @@ static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 		status = kgsl_iommu_setup_defaultpagetable(mmu);
 		if (status)
 			return -ENOMEM;
+
+		
+		if (msm_soc_version_supports_iommu_v1() &&
+			(device->id == KGSL_DEVICE_3D0))
+				kgsl_iommu_init_sync_lock(mmu);
 	}
+
 	if (cpu_is_msm8960()) {
 		struct kgsl_mh *mh = &(mmu->device->mh);
 		kgsl_regwrite(mmu->device, MH_MMU_CONFIG, 0x00000001);
@@ -777,8 +948,17 @@ static void kgsl_iommu_default_setstate(struct kgsl_mmu *mmu,
 	}
 	
 	pt_base &= (KGSL_IOMMU_TTBR0_PA_MASK << KGSL_IOMMU_TTBR0_PA_SHIFT);
+
+	
+	if (msm_soc_version_supports_iommu_v1())
+		kgsl_idle(mmu->device);
+
+	
+	msm_iommu_lock();
+
 	if (flags & KGSL_MMUFLAGS_PTUPDATE) {
-		kgsl_idle(mmu->device, KGSL_TIMEOUT_DEFAULT);
+		if (!msm_soc_version_supports_iommu_v1())
+			kgsl_idle(mmu->device);
 		for (i = 0; i < iommu->unit_count; i++) {
 			pt_val = kgsl_iommu_get_pt_lsb(mmu, i,
 						KGSL_IOMMU_CONTEXT_USER);
@@ -804,6 +984,10 @@ static void kgsl_iommu_default_setstate(struct kgsl_mmu *mmu,
 			mb();
 		}
 	}
+
+	
+	msm_iommu_unlock();
+
 	
 	kgsl_iommu_disable_clk_on_ts(mmu, 0, false);
 }
@@ -843,6 +1027,8 @@ struct kgsl_mmu_ops iommu_ops = {
 	.mmu_disable_clk_on_ts = kgsl_iommu_disable_clk_on_ts,
 	.mmu_get_pt_lsb = kgsl_iommu_get_pt_lsb,
 	.mmu_get_reg_map_desc = kgsl_iommu_get_reg_map_desc,
+	.mmu_sync_lock = kgsl_iommu_sync_lock,
+	.mmu_sync_unlock = kgsl_iommu_sync_unlock,
 };
 
 struct kgsl_mmu_pt_ops iommu_pt_ops = {

@@ -171,6 +171,7 @@ struct kgsl_device_platform_data {
 	struct kgsl_device_iommu_data *iommu_data;
 	int iommu_count;
 	struct msm_dcvs_core_info *core_info;
+	unsigned int snapshot_address;
 };
 
 #endif

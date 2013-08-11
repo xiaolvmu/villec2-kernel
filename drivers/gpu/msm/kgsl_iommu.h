@@ -65,6 +65,9 @@ struct kgsl_iommu {
 	unsigned int iommu_last_cmd_ts;
 	bool clk_event_queued;
 	struct kgsl_device *device;
+	struct remote_iommu_petersons_spinlock *sync_lock_vars;
+	struct kgsl_memdesc sync_lock_desc;
+	bool sync_lock_initialized;
 };
 
 struct kgsl_iommu_pt {
