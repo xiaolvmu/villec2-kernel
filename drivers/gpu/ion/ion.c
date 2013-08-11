@@ -33,6 +33,7 @@
 #include <linux/uaccess.h>
 #include <linux/debugfs.h>
 #include <linux/dma-buf.h>
+#include <linux/msm_ion.h>
 
 #include <mach/iommu_domains.h>
 #include "ion_priv.h"
@@ -248,10 +249,10 @@ static void ion_buffer_destroy(struct kref *kref)
 	buffer->heap->ops->unmap_dma(buffer->heap, buffer);
 
 	ion_iommu_delayed_unmap(buffer);
-	buffer->heap->ops->free(buffer);
 	mutex_lock(&dev->lock);
 	rb_erase(&buffer->node, &dev->buffers);
 	mutex_unlock(&dev->lock);
+	buffer->heap->ops->free(buffer);
 	kfree(buffer);
 }
 
@@ -765,31 +766,6 @@ void ion_unmap_kernel(struct ion_client *client, struct ion_handle *handle)
 	mutex_unlock(&client->lock);
 }
 EXPORT_SYMBOL(ion_unmap_kernel);
-
-static int check_vaddr_bounds(unsigned long start, unsigned long end)
-{
-	struct mm_struct *mm = current->active_mm;
-	struct vm_area_struct *vma;
-	int ret = 1;
-
-	if (end < start)
-		goto out;
-
-	down_read(&mm->mmap_sem);
-	vma = find_vma(mm, start);
-	if (vma && vma->vm_start < end) {
-		if (start < vma->vm_start)
-			goto out_up;
-		if (end > vma->vm_end)
-			goto out_up;
-		ret = 0;
-	}
-
-out_up:
-	up_read(&mm->mmap_sem);
-out:
-	return ret;
-}
 
 int ion_do_cache_op(struct ion_client *client, struct ion_handle *handle,
 			void *uaddr, unsigned long offset, unsigned long len,
@@ -1378,66 +1354,22 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		return dev->custom_ioctl(client, data.cmd, data.arg);
 	}
+	case ION_IOC_CLEAN_CACHES_OLD:
 	case ION_IOC_CLEAN_CACHES:
+		return client->dev->custom_ioctl(client,
+						ION_IOC_CLEAN_CACHES, arg);
+	case ION_IOC_INV_CACHES_OLD:
 	case ION_IOC_INV_CACHES:
+		return client->dev->custom_ioctl(client,
+						ION_IOC_INV_CACHES, arg);
+	case ION_IOC_CLEAN_INV_CACHES_OLD:
 	case ION_IOC_CLEAN_INV_CACHES:
-	{
-		struct ion_flush_data data;
-		unsigned long start, end;
-		struct ion_handle *handle = NULL;
-		int ret;
-
-		if (copy_from_user(&data, (void __user *)arg,
-				sizeof(struct ion_flush_data)))
-			return -EFAULT;
-
-		start = (unsigned long) data.vaddr;
-		end = (unsigned long) data.vaddr + data.length;
-
-		if (check_vaddr_bounds(start, end)) {
-			pr_err("%s: virtual address %p is out of bounds\n",
-				__func__, data.vaddr);
-			return -EINVAL;
-		}
-
-		if (!data.handle) {
-			handle = ion_import_dma_buf(client, data.fd);
-			if (IS_ERR(handle)) {
-				pr_info("%s: Could not import handle: %d\n",
-					__func__, (int)handle);
-				return -EINVAL;
-			}
-		}
-
-		ret = ion_do_cache_op(client,
-					data.handle ? data.handle : handle,
-					data.vaddr, data.offset, data.length,
-					cmd);
-
-		if (!data.handle)
-			ion_free(client, handle);
-
-		if (ret < 0)
-			return ret;
-		break;
-
-	}
+		return client->dev->custom_ioctl(client,
+						ION_IOC_CLEAN_INV_CACHES, arg);
+	case ION_IOC_GET_FLAGS_OLD:
 	case ION_IOC_GET_FLAGS:
-	{
-		struct ion_flag_data data;
-		int ret;
-		if (copy_from_user(&data, (void __user *)arg,
-				   sizeof(struct ion_flag_data)))
-			return -EFAULT;
-
-		ret = ion_handle_get_flags(client, data.handle, &data.flags);
-		if (ret < 0)
-			return ret;
-		if (copy_to_user((void __user *)arg, &data,
-				 sizeof(struct ion_flag_data)))
-			return -EFAULT;
-		break;
-	}
+		return client->dev->custom_ioctl(client,
+						ION_IOC_GET_FLAGS, arg);
 	default:
 		return -ENOTTY;
 	}
@@ -1489,7 +1421,9 @@ static size_t ion_debug_heap_total(struct ion_client *client,
 	size_t size = 0;
 	struct rb_node *n;
 
-	mutex_lock(&client->lock);
+	if (!mutex_trylock(&client->lock))
+		return -1;
+
 	for (n = rb_first(&client->handles); n; n = rb_next(n)) {
 		struct ion_handle *handle = rb_entry(n,
 						     struct ion_handle,
@@ -1501,19 +1435,27 @@ static size_t ion_debug_heap_total(struct ion_client *client,
 	return size;
 }
 
-static int ion_debug_find_buffer_owner(const struct ion_client *client,
+static int ion_debug_find_buffer_owner(struct ion_client *client,
 				       const struct ion_buffer *buf)
 {
 	struct rb_node *n;
+	int found = 0;
+
+	if (!mutex_trylock(&client->lock))
+		return 0;
 
 	for (n = rb_first(&client->handles); n; n = rb_next(n)) {
 		const struct ion_handle *handle = rb_entry(n,
 						     const struct ion_handle,
 						     node);
-		if (handle->buffer == buf)
-			return 1;
+		if (handle->buffer == buf) {
+			found = 1;
+			break;
+		}
 	}
-	return 0;
+
+	mutex_unlock(&client->lock);
+	return found;
 }
 
 static void ion_debug_mem_map_add(struct rb_root *mem_map,
