@@ -117,6 +117,7 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/legacy/libdivxdrmdecrypt.so:system/lib/libdivxdrmdecrypt.so              \
   vendor/htc/villec2/legacy/libgenlock.so:system/lib/libgenlock.so              \
   vendor/htc/villec2/legacy/libhwcexternal.so:system/lib/libhwcexternal.so               \
+  vendor/htc/villec2/legacy/libsurfaceflinger_client.so:system/lib/libsurfaceflinger_client.so               \
   vendor/htc/villec2/legacy/libhwcservice.so:system/lib/libhwcservice.so                 \
   vendor/htc/villec2/legacy/libmemalloc.so:system/lib/libmemalloc.so            \
   vendor/htc/villec2/legacy/libmm-omxcore.so:system/lib/libmm-omxcore.so             \
