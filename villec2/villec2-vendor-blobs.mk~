@@ -108,6 +108,8 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/proprietary/lib/libmpl_jni.so:system/lib/libmpl_jni.so \
   vendor/htc/villec2/proprietary/lib/libmpl.so:system/lib/libmpl.so \
   vendor/htc/villec2/proprietary/lib/libv8.so:system/lib/libv8.so  \
+  vendor/htc/villec2/legacy/hw/audio.primary.msm8660.so:system/lib/hw/audio.primary.msm8660.so \
+  vendor/htc/villec2/legacy/hw/audio_policy.msm8660.so:system/lib/hw/audio_policy.msm8660.so \
   vendor/htc/villec2/legacy/hw/camera.msm8660.so:system/lib/hw/camera.msm8660.so \
   vendor/htc/villec2/legacy/hw/copybit.msm8660.so:system/lib/hw/copybit.msm8660.so \
   vendor/htc/villec2/legacy/hw/gralloc.msm8660.so:system/lib/hw/gralloc.msm8660.so \
