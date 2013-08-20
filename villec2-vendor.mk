@@ -17,4 +17,4 @@
 # Pick up overlay for features that depend on non-open-source files
 DEVICE_PACKAGE_OVERLAYS := vendor/htc/villec2/overlay
 
-$(call inherit-product, vendor/htc/villec2/villec2-vendor-blobs.mk)
+$(call inherit-product, vendor/htc-extra/villec2/villec2-vendor-blobs.mk)
