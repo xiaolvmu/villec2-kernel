@@ -125,31 +125,4 @@ PRODUCT_COPY_FILES += \
   vendor/htc/villec2/legacy/liboverlay.so:system/lib/liboverlay.so               \
   vendor/htc/villec2/legacy/libqdutils.so:system/lib/libqdutils.so                  \
   vendor/htc/villec2/legacy/libselinux.so:system/lib/libselinux.so                  \
-  vendor/htc/villec2/legacy/libstagefrighthw.so:system/lib/libstagefrighthw.so      \
-  vendor/htc/villec2/include/OMX_Audio.h:obj/include/mm-core/omxcore/OMX_Audio.h      \
-  vendor/htc/villec2/include/OMX_Component.h:obj/include/mm-core/omxcore/OMX_Component.h      \
-  vendor/htc/villec2/include/OMX_ContentPipe.h:obj/include/mm-core/omxcore/OMX_ContentPipe.h      \
-  vendor/htc/villec2/include/OMX_Core.h:obj/include/mm-core/omxcore/OMX_Core.h     \
-  vendor/htc/villec2/include/OMX_Image.h:obj/include/mm-core/omxcore/OMX_Image.h      \
-  vendor/htc/villec2/include/OMX_Index.h:obj/include/mm-core/omxcore/OMX_Index.h      \
-  vendor/htc/villec2/include/OMX_IVCommon.h:obj/include/mm-core/omxcore/OMX_IVCommon.h      \
-  vendor/htc/villec2/include/OMX_Other.h:obj/include/mm-core/omxcore/OMX_Other.h      \
-  vendor/htc/villec2/include/OMX_QCOMExtns.h:obj/include/mm-core/omxcore/OMX_QCOMExtns.h      \
-  vendor/htc/villec2/include/OMX_Types.h:obj/include/mm-core/omxcore/OMX_Types.h      \
-  vendor/htc/villec2/include/OMX_Video.h:obj/include/mm-core/omxcore/OMX_Video.h     \
-  vendor/htc/villec2/include/qc_omx_common.h:obj/include/mm-core/omxcore/qc_omx_common.h     \
-  vendor/htc/villec2/include/qc_omx_component.h:obj/include/mm-core/omxcore/qc_omx_component.h      \
-  vendor/htc/villec2/include/qc_omx_msg.h:obj/include/mm-core/omxcore/qc_omx_msg.h      \
-  vendor/htc/villec2/include/QOMX_AudioExtensions.h:obj/include/mm-core/omxcore/QOMX_AudioExtensions.h      \
-  vendor/htc/villec2/include/QOMX_AudioIndexExtensions.h:obj/include/mm-core/omxcore/QOMX_AudioIndexExtensions.h     \
-  vendor/htc/villec2/include/OMX_CoreExt.h:obj/include/mm-core/omxcore/OMX_CoreExt.h     \
-  vendor/htc/villec2/include/QOMX_CoreExtensions.h:obj/include/mm-core/omxcore/QOMX_CoreExtensions.h      \
-  vendor/htc/villec2/include/QOMX_FileFormatExtensions.h:obj/include/mm-core/omxcore/QOMX_FileFormatExtensions.h     \
-  vendor/htc/villec2/include/QOMX_IVCommonExtensions.h:obj/include/mm-core/omxcore/QOMX_IVCommonExtensions.h      \
-  vendor/htc/villec2/include/QOMX_SourceExtensions.h:obj/include/mm-core/omxcore/QOMX_SourceExtensions.h     \
-  vendor/htc/villec2/include/QOMX_VideoExtensions.h:obj/include/mm-core/omxcore/QOMX_VideoExtensions.h      \
-  vendor/htc/villec2/include/OMX_IndexExt.h:obj/include/mm-core/omxcore/OMX_IndexExt.h     \
-  vendor/htc/villec2/include/QOMX_StreamingExtensions.h:obj/include/mm-core/omxcore/QOMX_StreamingExtensions.h     \
-  vendor/htc/villec2/include/QCMediaDefs.h:obj/include/mm-core/omxcore/QCMediaDefs.h      \
-  vendor/htc/villec2/include/QCMetaData.h:obj/include/mm-core/omxcore/QCMetaData.h      \
-
+  vendor/htc/villec2/legacy/libstagefrighthw.so:system/lib/libstagefrighthw.so      
