@@ -227,6 +227,11 @@ config TOUCHSCREEN_CYPRESS_CS
 	  Say Y here if you have cap sensor on your device
 	  If unsure, say N.
 
+config TOUCHSCREEN_CYPRESS_SWEEP2WAKE
+        tristate "Sweep2Wake for Cypress CS touchscreens"
+        depends on TOUCHSCREEN_CYPRESS_CS
+        default n
+
 config TOUCHSCREEN_CYTTSP_SPI
 	tristate "support SPI bus connection"
 	depends on TOUCHSCREEN_CYTTSP_CORE && SPI_MASTER
@@ -1008,3 +1013,4 @@ config TOUCHSCREEN_MAX11871
           If unsure, say N.
 
 endif
+
