@@ -124,8 +124,9 @@ struct snd_card {
 	int shutdown;			
 	int free_on_last_close;		
 	wait_queue_head_t shutdown_sleep;
-	struct device *dev;		
-	struct device *card_dev;	
+	atomic_t refcount;		/* refcount for disconnection */
+	struct device *dev;		/* device assigned to this card */
+	struct device *card_dev;	/* cardX object for sysfs */
 
 #ifdef CONFIG_PM
 	unsigned int power_state;	
@@ -174,12 +175,13 @@ static inline int snd_power_wait(struct snd_card *card, unsigned int state) { re
 #endif 
 
 struct snd_minor {
-	int type;			
-	int card;			
-	int device;			
-	const struct file_operations *f_ops;	
-	void *private_data;		
-	struct device *dev;		
+	int type;			/* SNDRV_DEVICE_TYPE_XXX */
+	int card;			/* card number */
+	int device;			/* device number */
+	const struct file_operations *f_ops;	/* file operations */
+	void *private_data;		/* private data for f_ops->open */
+	struct device *dev;		/* device for sysfs */
+	struct snd_card *card_ptr;	/* assigned card instance */
 };
 
 static inline struct device *snd_card_get_device_link(struct snd_card *card)
@@ -264,6 +266,7 @@ int snd_card_info_done(void);
 int snd_component_add(struct snd_card *card, const char *component);
 int snd_card_file_add(struct snd_card *card, struct file *file);
 int snd_card_file_remove(struct snd_card *card, struct file *file);
+void snd_card_unref(struct snd_card *card);
 
 #define snd_card_set_dev(card, devptr) ((card)->dev = (devptr))
 

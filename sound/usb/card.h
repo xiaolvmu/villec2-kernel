@@ -82,11 +82,12 @@ struct snd_usb_substream {
 	unsigned long active_mask;	
 	unsigned long unlink_mask;	
 
-	unsigned int nurbs;			
-	struct snd_urb_ctx dataurb[MAX_URBS];	
-	struct snd_urb_ctx syncurb[SYNC_URBS];	
-	char *syncbuf;				
-	dma_addr_t sync_dma;			
+	unsigned int nurbs;			/* # urbs */
+	struct snd_urb_ctx dataurb[MAX_URBS];	/* data urb table */
+	struct snd_urb_ctx syncurb[SYNC_URBS];	/* sync urb table */
+	char *syncbuf;				/* sync buffer for all sync URBs */
+	dma_addr_t sync_dma;			/* DMA address of syncbuf */
+	unsigned int speed;		/* USB_SPEED_XXX */
 
 	u64 formats;			
 	unsigned int num_formats;		

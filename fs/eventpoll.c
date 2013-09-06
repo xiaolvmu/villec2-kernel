@@ -835,10 +835,39 @@ static int ep_modify(struct eventpoll *ep, struct epitem *epi, struct epoll_even
 
 	init_poll_funcptr(&pt, NULL);
 
-	epi->event.events = event->events;
+	/*
+	 * Set the new event interest mask before calling f_op->poll();
+	 * otherwise we might miss an event that happens between the
+	 * f_op->poll() call and the new event set registering.
+	 */
+	epi->event.events = event->events; /* need barrier below */
 	pt._key = event->events;
 	epi->event.data = event->data; 
 
+	/*
+	 * The following barrier has two effects:
+	 *
+	 * 1) Flush epi changes above to other CPUs.  This ensures
+	 *    we do not miss events from ep_poll_callback if an
+	 *    event occurs immediately after we call f_op->poll().
+	 *    We need this because we did not take ep->lock while
+	 *    changing epi above (but ep_poll_callback does take
+	 *    ep->lock).
+	 *
+	 * 2) We also need to ensure we do not miss _past_ events
+	 *    when calling f_op->poll().  This barrier also
+	 *    pairs with the barrier in wq_has_sleeper (see
+	 *    comments for wq_has_sleeper).
+	 *
+	 * This barrier will now guarantee ep_poll_callback or f_op->poll
+	 * (or both) will notice the readiness of an item.
+	 */
+	smp_mb();
+
+	/*
+	 * Get current event bits. We can safely use the file* here because
+	 * its usage count has been increased by the caller of this function.
+	 */
 	revents = epi->ffd.file->f_op->poll(epi->ffd.file, &pt);
 
 	if (revents & event->events) {

@@ -277,6 +277,7 @@ struct mmc_card {
 						
 #define MMC_QUIRK_INAND_DATA_TIMEOUT  (1<<8)    
 	unsigned int    	poweroff_notify_state;	
+#define MMC_QUIRK_SEC_ERASE_TRIM_BROKEN (1<<10)
 #define MMC_NO_POWER_NOTIFICATION	0
 #define MMC_POWERED_ON			1
 

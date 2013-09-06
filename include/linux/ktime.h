@@ -39,13 +39,9 @@ union ktime {
 
 typedef union ktime ktime_t;		
 
-#define KTIME_MAX			((s64)~((u64)1 << 63))
-#if (BITS_PER_LONG == 64)
-# define KTIME_SEC_MAX			(KTIME_MAX / NSEC_PER_SEC)
-#else
-# define KTIME_SEC_MAX			LONG_MAX
-#endif
-
+/*
+ * ktime_t definitions when using the 64-bit scalar representation:
+ */
 
 #if (BITS_PER_LONG == 64) || defined(CONFIG_KTIME_SCALAR)
 

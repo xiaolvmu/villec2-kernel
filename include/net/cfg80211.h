@@ -1103,6 +1103,22 @@ unsigned int ieee80211_get_hdrlen_from_skb(const struct sk_buff *skb);
 
 unsigned int __attribute_const__ ieee80211_hdrlen(__le16 fc);
 
+/**
+ * ieee80211_get_mesh_hdrlen - get mesh extension header length
+ * @meshhdr: the mesh extension header, only the flags field
+ *	(first byte) will be accessed
+ * Returns the length of the extension header, which is always at
+ * least 6 bytes and at most 18 if address 5 and 6 are present.
+ */
+unsigned int ieee80211_get_mesh_hdrlen(struct ieee80211s_hdr *meshhdr);
+
+/**
+ * DOC: Data path helpers
+ *
+ * In addition to generic utilities, cfg80211 also offers
+ * functions that help implement the data path for devices
+ * that do not do the 802.11/802.3 conversion on the device.
+ */
 
 int ieee80211_data_to_8023(struct sk_buff *skb, const u8 *addr,
 			   enum nl80211_iftype iftype);
