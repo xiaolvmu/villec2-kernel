@@ -123,12 +123,14 @@ static unsigned long round_jiffies_common(unsigned long j, int cpu,
 	else 
 		j = j - rem + HZ;
 
-	
+	/* now that we have rounded, subtract the extra skew again */
 	j -= cpu * 3;
 
-	if (j <= jiffies) 
-		return original;
-	return j;
+	/*
+	 * Make sure j is still in the future. Otherwise return the
+	 * unmodified value.
+	 */
+	return time_is_after_jiffies(j) ? j : original;
 }
 
 unsigned long __round_jiffies(unsigned long j, int cpu)
