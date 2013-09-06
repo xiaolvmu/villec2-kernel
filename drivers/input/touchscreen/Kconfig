@@ -1013,4 +1013,3 @@ config TOUCHSCREEN_MAX11871
           If unsure, say N.
 
 endif
-
