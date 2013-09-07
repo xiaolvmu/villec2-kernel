@@ -109,7 +109,17 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
 
+config CPU_FREQ_DEFAULT_GOV_INTELLIDEMAND
+	bool "intellidemand"
+	select CPU_FREQ_GOV_INTELLIDEMAND
+	help
+	  Use the CPUFreq governor 'intellidemand' as default.
+
 endchoice
+
+config CPU_FREQ_GOV_INTELLIDEMAND
+    tristate "'intellidemand' cpufreq governor"
+    depends on CPU_FREQ
 
 config CPU_FREQ_GOV_PERFORMANCE
 	tristate "'performance' governor"
