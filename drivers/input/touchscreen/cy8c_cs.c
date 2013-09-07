@@ -1149,7 +1149,9 @@ static struct i2c_driver cy8c_cs_driver = {
 static int __init cy8c_cs_init(void)
 {
 	printk(KERN_INFO "[cap] %s: enter\n", __func__);
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_SWEEP2WAKE
 	wake_lock_init(&sweep2unlock_wake_lock, WAKE_LOCK_SUSPEND, "sweep2unlock");
+#endif
 	return i2c_add_driver(&cy8c_cs_driver);
 }
 
