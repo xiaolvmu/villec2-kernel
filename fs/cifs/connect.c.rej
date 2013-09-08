@@ -1,0 +1,13 @@
+--- fs/cifs/connect.c
++++ fs/cifs/connect.c
+@@ -2357,8 +2358,8 @@
+ 
+ #ifdef CONFIG_KEYS
+ 
+-/* strlen("cifs:a:") + INET6_ADDRSTRLEN + 1 */
+-#define CIFSCREDS_DESC_SIZE (7 + INET6_ADDRSTRLEN + 1)
++/* strlen("cifs:a:") + CIFS_MAX_DOMAINNAME_LEN + 1 */
++#define CIFSCREDS_DESC_SIZE (7 + CIFS_MAX_DOMAINNAME_LEN + 1)
+ 
+ /* Populate username and pw fields from keyring if possible */
+ static int

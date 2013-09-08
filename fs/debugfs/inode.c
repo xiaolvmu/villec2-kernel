@@ -423,8 +423,7 @@ EXPORT_SYMBOL_GPL(debugfs_remove);
 
 void debugfs_remove_recursive(struct dentry *dentry)
 {
-	struct dentry *child;
-	struct dentry *parent;
+	struct dentry *child, *next, *parent;
 
 	if (!dentry)
 		return;
