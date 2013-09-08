@@ -156,7 +156,8 @@ struct worker {
 		struct hlist_node	hentry;	
 	};
 
-	struct work_struct	*current_work;	
+	struct work_struct	*current_work;
+	work_func_t		current_func;	
 	struct cpu_workqueue_struct *current_cwq; 
 	struct list_head	scheduled;	
 	struct task_struct	*task;		

@@ -389,14 +389,8 @@ out:
 	return ret;
 }
 
-/*
-* Initialize event state based on the perf_event_attr::disabled.
-*/
-static inline void perf_event__state_init(struct perf_event *event)
-{
-	event->state = event->attr.disabled ? PERF_EVENT_STATE_OFF :
-					      PERF_EVENT_STATE_INACTIVE;
-}
+
+
 
 static inline void
 perf_cgroup_set_shadow_time(struct perf_event *event, u64 now)
@@ -695,11 +689,18 @@ static void update_event_times(struct perf_event *event)
 
 static void update_group_times(struct perf_event *leader)
 {
+
 	struct perf_event *event;
 
 	update_event_times(leader);
 	list_for_each_entry(event, &leader->sibling_list, group_entry)
 		update_event_times(event);
+}
+
+static inline void perf_event__state_init(struct perf_event *event)
+{
+	event->state = event->attr.disabled ? PERF_EVENT_STATE_OFF :
+					      PERF_EVENT_STATE_INACTIVE;
 }
 
 static struct list_head *
