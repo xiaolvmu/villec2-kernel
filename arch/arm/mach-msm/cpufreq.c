@@ -283,7 +283,6 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 	struct cpufreq_work_struct *cpu_work = NULL;
 #endif
 
-
 	table = cpufreq_frequency_get_table(policy->cpu);
 	if (table == NULL)
 		return -ENODEV;
@@ -300,6 +299,8 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 	policy->min = CONFIG_MSM_CPU_FREQ_MIN;
 	policy->max = CONFIG_MSM_CPU_FREQ_MAX;
 #endif
+
+	policy->max = 1512000;
 
 	cur_freq = acpuclk_get_rate(policy->cpu);
 	if (cpufreq_frequency_table_target(policy, table, cur_freq,
