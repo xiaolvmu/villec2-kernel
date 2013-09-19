@@ -71,7 +71,7 @@ struct htb_class {
 	unsigned int children;
 	struct htb_class *parent;	
 
-	int prio;		
+	u32 prio;		
 	int quantum;		
 
 	union {
