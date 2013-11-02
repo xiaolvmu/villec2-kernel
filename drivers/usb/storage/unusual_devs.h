@@ -367,17 +367,6 @@ UNUSUAL_DEV(  0x04e8, 0x5122, 0x0000, 0x9999,
 		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
 		US_FL_MAX_SECTORS_64 | US_FL_BULK_IGNORE_TAG),
 
-/* Added by Dmitry Artamonow <mad_soft@inbox.ru> */
-UNUSUAL_DEV(  0x04e8, 0x5136, 0x0000, 0x9999,
-		"Samsung",
-		"YP-Z3",
-		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
-		US_FL_MAX_SECTORS_64),
-
-/* Entry and supporting patch by Theodore Kilgore <kilgota@auburn.edu>.
- * Device uses standards-violating 32-byte Bulk Command Block Wrappers and
- * reports itself as "Proprietary SCSI Bulk." Cf. device entry 0x084d:0x0011.
- */
 UNUSUAL_DEV(  0x04fc, 0x80c2, 0x0100, 0x0100,
 		"Kobian Mercury",
 		"Binocam DCB-132",
@@ -401,12 +390,6 @@ COMPLIANT_DEV(0x0525, 0xa4a5, 0x0000, 0x9999,
 		"File-backed Storage Gadget",
 		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
 		US_FL_CAPACITY_OK ),
-
-UNUSUAL_DEV(  0x054c, 0x02a5, 0x0100, 0x0100,
-		"Sony Corp.",
-		"MicroVault Flash Drive",
-		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
-		US_FL_NO_READ_CAPACITY_16 ),
 
 UNUSUAL_DEV(  0x052b, 0x1801, 0x0100, 0x0100,
 		"Tekom Technologies, Inc",
@@ -783,13 +766,6 @@ UNUSUAL_DEV( 0x07cf, 0x1001, 0x1000, 0x9999,
 		USB_SC_8070, USB_PR_CB, NULL,
 		US_FL_NEED_OVERRIDE | US_FL_FIX_INQUIRY ),
 
-/* Submitted by Oleksandr Chumachenko <ledest@gmail.com> */
-UNUSUAL_DEV( 0x07cf, 0x1167, 0x0100, 0x0100,
-		"Casio",
-		"EX-N1 DigitalCamera",
-		USB_SC_8070, USB_PR_DEVICE, NULL, 0),
-
-/* Submitted by Hartmut Wahl <hwahl@hwahl.de>*/
 UNUSUAL_DEV( 0x0839, 0x000a, 0x0001, 0x0001,
 		"Samsung",
 		"Digimax 410",
