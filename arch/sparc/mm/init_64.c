@@ -1682,7 +1682,7 @@ static void __init sun4v_ktsb_init(void)
 #endif
 }
 
-void __cpuinit sun4v_ktsb_register(void)
+void sun4v_ktsb_register(void)
 {
 	unsigned long pa, ret;
 

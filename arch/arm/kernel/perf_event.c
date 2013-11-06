@@ -686,6 +686,12 @@ static void armpmu_update_counters(void)
 }
 
 static int cpu_has_active_perf(void)
+/*
+ * PMU hardware loses all context when a CPU goes offline.
+ * When a CPU is hotplugged back in, since some hardware registers are
+ * UNKNOWN at reset, the PMU must be explicitly reset to avoid reading
+ * junk values out of them.
+ */
 {
 	struct pmu_hw_events *hw_events;
 	int enabled;
@@ -703,7 +709,7 @@ static int cpu_has_active_perf(void)
 	return 0;
 }
 
-static struct notifier_block __cpuinitdata pmu_cpu_notifier = {
+static struct notifier_block pmu_cpu_notifier = {
 	.notifier_call = pmu_cpu_notify,
 };
 
