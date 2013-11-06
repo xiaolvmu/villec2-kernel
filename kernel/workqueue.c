@@ -2230,7 +2230,7 @@ EXPORT_SYMBOL_GPL(work_busy);
 	__ret1 < 0 ? -1 : 0;						\
 })
 
-static int __cpuinit trustee_thread(void *__gcwq)
+static int trustee_thread(void *__gcwq)
 {
 	struct global_cwq *gcwq = __gcwq;
 	struct worker *worker;
@@ -2335,7 +2335,18 @@ static int __cpuinit trustee_thread(void *__gcwq)
 	return 0;
 }
 
-static void __cpuinit wait_trustee_state(struct global_cwq *gcwq, int state)
+/**
+ * wait_trustee_state - wait for trustee to enter the specified state
+ * @gcwq: gcwq the trustee of interest belongs to
+ * @state: target state to wait for
+ *
+ * Wait for the trustee to reach @state.  DONE is already matched.
+ *
+ * CONTEXT:
+ * spin_lock_irq(gcwq->lock) which may be released and regrabbed
+ * multiple times.  To be used by cpu_callback.
+ */
+static void wait_trustee_state(struct global_cwq *gcwq, int state)
 __releases(&gcwq->lock)
 __acquires(&gcwq->lock)
 {
@@ -2349,7 +2360,7 @@ __acquires(&gcwq->lock)
 	}
 }
 
-static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
+static int workqueue_cpu_callback(struct notifier_block *nfb,
 						unsigned long action,
 						void *hcpu)
 {
@@ -2431,7 +2442,11 @@ static int __devinit workqueue_cpu_callback(struct notifier_block *nfb,
 	return notifier_from_errno(0);
 }
 
-static int __devinit workqueue_cpu_up_callback(struct notifier_block *nfb,
+/*
+ * Workqueues should be brought up before normal priority CPU notifiers.
+ * This will be registered high priority CPU notifier.
+ */
+static int workqueue_cpu_up_callback(struct notifier_block *nfb,
 					       unsigned long action,
 					       void *hcpu)
 {
@@ -2445,7 +2460,11 @@ static int __devinit workqueue_cpu_up_callback(struct notifier_block *nfb,
 	return NOTIFY_OK;
 }
 
-static int __devinit workqueue_cpu_down_callback(struct notifier_block *nfb,
+/*
+ * Workqueues should be brought down after normal priority CPU notifiers.
+ * This will be registered as low priority CPU notifier.
+ */
+static int workqueue_cpu_down_callback(struct notifier_block *nfb,
 						 unsigned long action,
 						 void *hcpu)
 {
