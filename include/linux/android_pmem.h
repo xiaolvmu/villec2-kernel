@@ -177,6 +177,7 @@ struct android_pmem_platform_data
 	/*
 	 * indicates that this region should be mapped/unmaped as needed
 	 */
+	int reusable;
 	int map_on_demand;
 };
 
