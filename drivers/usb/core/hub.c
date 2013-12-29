@@ -1116,6 +1116,7 @@ static int hub_configure(struct usb_hub *hub,
 	return 0;
 
 fail:
+	hdev->maxchild = 0;
 	dev_err (hub_dev, "config failed, %s (err %d)\n",
 			message, ret);
 	
