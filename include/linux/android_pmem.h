@@ -154,10 +154,10 @@ struct android_pmem_platform_data
 	void *(*setup_region)(void);
 	
 	int map_on_demand;
+	/*
 	 * indicates that this region should be mapped/unmaped as needed
 	 */
 	int reusable;
-	int map_on_demand;
 };
 
 int pmem_setup(struct android_pmem_platform_data *pdata,
@@ -169,4 +169,3 @@ int pmem_remap(struct pmem_region *region, struct file *file,
 #endif /* __KERNEL__ */
 
 #endif //_ANDROID_PPP_H_
-
