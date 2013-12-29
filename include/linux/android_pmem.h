@@ -109,27 +109,6 @@ enum pmem_allocator_type {
 	PMEM_ALLOCATORTYPE_MAX,
 };
 
-#define PMEM_MEMTYPE_MASK 0x7
-#define PMEM_INVALID_MEMTYPE 0x0
-#define PMEM_MEMTYPE_EBI1 0x1
-#define PMEM_MEMTYPE_SMI  0x2
-#define PMEM_MEMTYPE_RESERVED_INVALID2 0x3
-#define PMEM_MEMTYPE_RESERVED_INVALID3 0x4
-#define PMEM_MEMTYPE_RESERVED_INVALID4 0x5
-#define PMEM_MEMTYPE_RESERVED_INVALID5 0x6
-#define PMEM_MEMTYPE_RESERVED_INVALID6 0x7
-
-#define PMEM_ALIGNMENT_MASK 0x18
-#define PMEM_ALIGNMENT_RESERVED_INVALID1 0x0
-#define PMEM_ALIGNMENT_4K 0x8 /* the default */
-#define PMEM_ALIGNMENT_1M 0x10
-#define PMEM_ALIGNMENT_RESERVED_INVALID2 0x18
-
-/* flags in the following function defined as above. */
-int32_t pmem_kalloc(const size_t size, const uint32_t flags);
-int32_t pmem_kfree(const int32_t physaddr);
-
-/* kernel api names for board specific data structures */
 #define PMEM_KERNEL_EBI1_DATA_NAME "pmem_kernel_ebi1"
 #define PMEM_KERNEL_SMI_DATA_NAME "pmem_kernel_smi"
 
@@ -143,7 +122,6 @@ struct android_pmem_platform_data
 	 * otherwise, just assign it to pmem info base.
 	 * android will handle remaining remap things.
 	 */
-	unsigned long start;
 
 	enum pmem_allocator_type allocator_type;
 	/* treated as a 'hidden' variable in the board files. Can be
@@ -164,17 +142,18 @@ struct android_pmem_platform_data
 	 * function to be called when the number of allocations goes from
 	 * 0 -> 1
 	 */
-	void (*request_region)(void *);
+	int (*request_region)(void *);
 	/*
 	 * function to be called when the number of allocations goes from
 	 * 1 -> 0
 	 */
-	void (*release_region)(void *);
+	int (*release_region)(void *);
 	/*
 	 * function to be called upon pmem registration
 	 */
 	void *(*setup_region)(void);
-	/*
+	
+	int map_on_demand;
 	 * indicates that this region should be mapped/unmaped as needed
 	 */
 	int reusable;
