@@ -198,7 +198,7 @@ again:
 		put_page(page);
 		
 		local_irq_disable();
-		if (likely(__get_user_pages_fast(address, 1, 1, &page) == 1)) {
+		if (likely(__get_user_pages_fast(address, 1, !ro, &page) == 1)) {
 			page_head = compound_head(page);
 			if (page != page_head) {
 				get_page(page_head);
