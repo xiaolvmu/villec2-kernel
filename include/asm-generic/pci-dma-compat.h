@@ -1,9 +1,21 @@
 
-#ifndef _ASM_GENERIC_PCI_DMA_COMPAT_H
+
 #define _ASM_GENERIC_PCI_DMA_COMPAT_H
 
 #include <linux/dma-mapping.h>
 
+#define dma_map_single_attrs(dev, cpu_addr, size, dir, attrs) \
+	dma_map_single(dev, cpu_addr, size, dir)
+
+#define dma_unmap_single_attrs(dev, dma_addr, size, dir, attrs) \
+	dma_unmap_single(dev, dma_addr, size, dir)
+
+#define dma_map_sg_attrs(dev, sgl, nents, dir, attrs) \
+	dma_map_sg(dev, sgl, nents, dir)
+
+#define dma_unmap_sg_attrs(dev, sgl, nents, dir, attrs) \
+	dma_unmap_sg(dev, sgl, nents, dir)
+	
 static inline int
 pci_dma_supported(struct pci_dev *hwdev, u64 mask)
 {
@@ -111,4 +123,4 @@ static inline int pci_set_consistent_dma_mask(struct pci_dev *dev, u64 mask)
 }
 #endif
 
-#endif
+

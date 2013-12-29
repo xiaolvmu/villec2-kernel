@@ -2,7 +2,7 @@
  * drivers/gpu/ion/ion_carveout_heap.c
  *
  * Copyright (C) 2011 Google, Inc.
- * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -23,7 +23,6 @@
 #include <linux/mm.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
-#include <linux/vmalloc.h>
 #include <linux/iommu.h>
 #include <linux/seq_file.h>
 #include "ion_priv.h"
@@ -31,6 +30,7 @@
 #include <mach/iommu_domains.h>
 #include <asm/mach/map.h>
 #include <asm/cacheflush.h>
+#include <linux/msm_ion.h>
 
 struct ion_carveout_heap {
 	struct ion_heap heap;
@@ -240,25 +240,78 @@ int ion_carveout_cache_ops(struct ion_heap *heap, struct ion_buffer *buffer,
 			void *vaddr, unsigned int offset, unsigned int length,
 			unsigned int cmd)
 {
-	void (*outer_cache_op)(phys_addr_t, phys_addr_t);
+	void (*outer_cache_op)(phys_addr_t, phys_addr_t) = NULL;
 	struct ion_carveout_heap *carveout_heap =
 	     container_of(heap, struct  ion_carveout_heap, heap);
+	unsigned int size_to_vmap, total_size;
+	int i, j;
+	void *ptr = NULL;
+	ion_phys_addr_t buff_phys = buffer->priv_phys;
 
-	switch (cmd) {
-	case ION_IOC_CLEAN_CACHES:
-		dmac_clean_range(vaddr, vaddr + length);
-		outer_cache_op = outer_clean_range;
-		break;
-	case ION_IOC_INV_CACHES:
-		dmac_inv_range(vaddr, vaddr + length);
-		outer_cache_op = outer_inv_range;
-		break;
-	case ION_IOC_CLEAN_INV_CACHES:
-		dmac_flush_range(vaddr, vaddr + length);
-		outer_cache_op = outer_flush_range;
-		break;
-	default:
-		return -EINVAL;
+	if (!vaddr) {
+		/*
+		 * Split the vmalloc space into smaller regions in
+		 * order to clean and/or invalidate the cache.
+		 */
+		size_to_vmap = ((VMALLOC_END - VMALLOC_START)/8);
+		total_size = buffer->size;
+
+		for (i = 0; i < total_size; i += size_to_vmap) {
+			size_to_vmap = min(size_to_vmap, total_size - i);
+			for (j = 0; j < 10 && size_to_vmap; ++j) {
+				ptr = ioremap(buff_phys, size_to_vmap);
+				if (ptr) {
+					switch (cmd) {
+					case ION_IOC_CLEAN_CACHES:
+						dmac_clean_range(ptr,
+							ptr + size_to_vmap);
+						outer_cache_op =
+							outer_clean_range;
+						break;
+					case ION_IOC_INV_CACHES:
+						dmac_inv_range(ptr,
+							ptr + size_to_vmap);
+						outer_cache_op =
+							outer_inv_range;
+						break;
+					case ION_IOC_CLEAN_INV_CACHES:
+						dmac_flush_range(ptr,
+							ptr + size_to_vmap);
+						outer_cache_op =
+							outer_flush_range;
+						break;
+					default:
+						return -EINVAL;
+					}
+					buff_phys += size_to_vmap;
+					break;
+				} else {
+					size_to_vmap >>= 1;
+				}
+			}
+			if (!ptr) {
+				pr_err("Couldn't io-remap the memory\n");
+				return -EINVAL;
+			}
+			iounmap(ptr);
+		}
+	} else {
+		switch (cmd) {
+		case ION_IOC_CLEAN_CACHES:
+			dmac_clean_range(vaddr, vaddr + length);
+			outer_cache_op = outer_clean_range;
+			break;
+		case ION_IOC_INV_CACHES:
+			dmac_inv_range(vaddr, vaddr + length);
+			outer_cache_op = outer_inv_range;
+			break;
+		case ION_IOC_CLEAN_INV_CACHES:
+			dmac_flush_range(vaddr, vaddr + length);
+			outer_cache_op = outer_flush_range;
+			break;
+		default:
+			return -EINVAL;
+		}
 	}
 
 	if (carveout_heap->has_outer_cache) {
@@ -286,19 +339,18 @@ static int ion_carveout_print_debug(struct ion_heap *heap, struct seq_file *s,
 		struct rb_node *n;
 
 		seq_printf(s, "\nMemory Map\n");
-		seq_printf(s, "%16.s %16.s %14.s %14.s %14.s\n",
-			   "client", "creator", "start address", "end address",
+		seq_printf(s, "%16.s %14.s %14.s %14.s\n",
+			   "client", "start address", "end address",
 			   "size (hex)");
 
 		for (n = rb_first(mem_map); n; n = rb_next(n)) {
 			struct mem_map_data *data =
 					rb_entry(n, struct mem_map_data, node);
 			const char *client_name = "(null)";
-			const char *creator_name = "(null)";
 
 			if (last_end < data->addr) {
-				seq_printf(s, "%16.s %16.s %14lx %14lx %14lu (%lx)\n",
-					   "FREE", "NA", last_end, data->addr-1,
+				seq_printf(s, "%16.s %14lx %14lx %14lu (%lx)\n",
+					   "FREE", last_end, data->addr-1,
 					   data->addr-last_end,
 					   data->addr-last_end);
 			}
@@ -306,17 +358,14 @@ static int ion_carveout_print_debug(struct ion_heap *heap, struct seq_file *s,
 			if (data->client_name)
 				client_name = data->client_name;
 
-			if (data->creator_name)
-				creator_name = data->creator_name;
-
-			seq_printf(s, "%16.s %16.s %14lx %14lx %14lu (%lx)\n",
-				   client_name, creator_name, data->addr,
+			seq_printf(s, "%16.s %14lx %14lx %14lu (%lx)\n",
+				   client_name, data->addr,
 				   data->addr_end,
 				   data->size, data->size);
 			last_end = data->addr_end+1;
 		}
 		if (last_end < end) {
-			seq_printf(s, "%16.s %16.s %14lx %14lx %14lu (%lx)\n", "FREE", "NA",
+			seq_printf(s, "%16.s %14lx %14lx %14lu (%lx)\n", "FREE",
 				last_end, end-1, end-last_end, end-last_end);
 		}
 	}
@@ -361,7 +410,7 @@ int ion_carveout_heap_map_iommu(struct ion_buffer *buffer,
 		goto out1;
 	}
 
-	sglist = vmalloc(sizeof(*sglist));
+	sglist = kmalloc(sizeof(*sglist), GFP_KERNEL);
 	if (!sglist)
 		goto out1;
 
@@ -385,13 +434,13 @@ int ion_carveout_heap_map_iommu(struct ion_buffer *buffer,
 		if (ret)
 			goto out2;
 	}
-	vfree(sglist);
+	kfree(sglist);
 	return ret;
 
 out2:
 	iommu_unmap_range(domain, data->iova_addr, buffer->size);
 out1:
-	vfree(sglist);
+	kfree(sglist);
 	msm_free_iova_address(data->iova_addr, domain_num, partition_num,
 				data->mapped_size);
 
