@@ -22,6 +22,7 @@
 #include <linux/backing-dev.h>
 #include <linux/memcontrol.h>
 #include <linux/gfp.h>
+#include <linux/hugetlb.h>
 
 #include "internal.h"
 
@@ -55,13 +56,26 @@ static void __put_compound_page(struct page *page)
 {
 	compound_page_dtor *dtor;
 
-	__page_cache_release(page);
+	if (!PageHuge(page))
+		__page_cache_release(page);
 	dtor = get_compound_page_dtor(page);
 	(*dtor)(page);
 }
 
 static void put_compound_page(struct page *page)
 {
+	/*
+	 * hugetlbfs pages cannot be split from under us.  If this is a
+	 * hugetlbfs page, check refcount on head page and release the page if
+	 * the refcount becomes zero.
+	 */
+	if (PageHuge(page)) {
+		page = compound_head(page);
+		if (put_page_testzero(page))
+			__put_compound_page(page);
+		return;
+	}
+
 	if (unlikely(PageTail(page))) {
 		
 		struct page *page_head = compound_trans_head(page);
@@ -122,8 +136,20 @@ bool __get_page_tail(struct page *page)
 {
 	unsigned long flags;
 	bool got = false;
-	struct page *page_head = compound_trans_head(page);
+	struct page *page_head;
 
+	/*
+	 * If this is a hugetlbfs page it cannot be split under us.  Simply
+	 * increment refcount for the head page.
+	 */
+	if (PageHuge(page)) {
+		page_head = compound_head(page);
+		atomic_inc(&page_head->_count);
+		got = true;
+		goto out;
+	}
+
+	page_head = compound_trans_head(page);
 	if (likely(page != page_head && get_page_unless_zero(page_head))) {
 		flags = compound_lock_irqsave(page_head);
 		
@@ -135,6 +161,7 @@ bool __get_page_tail(struct page *page)
 		if (unlikely(!got))
 			put_page(page_head);
 	}
+out:
 	return got;
 }
 EXPORT_SYMBOL(__get_page_tail);
