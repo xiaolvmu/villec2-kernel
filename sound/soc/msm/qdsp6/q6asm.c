@@ -38,7 +38,7 @@
 #include <mach/peripheral-loader.h>
 #include <mach/qdsp6v2/audio_acdb.h>
 #include <mach/qdsp6v2/rtac.h>
-
+#include <linux/msm_ion.h>
 #include <sound/apr_audio.h>
 #include <sound/q6asm.h>
 
@@ -536,7 +536,7 @@ int q6asm_audio_client_buf_alloc(unsigned int dir,
 					}
 					buf[cnt].handle = ion_alloc
 						(buf[cnt].client, bufsz, SZ_4K,
-						(0x1 << ION_AUDIO_HEAP_ID));
+						(0x1 << ION_AUDIO_HEAP_ID), 0);
 					if (IS_ERR_OR_NULL((void *)
 						buf[cnt].handle)) {
 						pr_err("%s: ION memory allocation for AUDIO failed\n",
@@ -558,8 +558,7 @@ int q6asm_audio_client_buf_alloc(unsigned int dir,
 					}
 
 					buf[cnt].data = ion_map_kernel
-					(buf[cnt].client, buf[cnt].handle,
-							 0);
+                                          (buf[cnt].client, buf[cnt].handle);
 					if (IS_ERR_OR_NULL((void *)
 						buf[cnt].data)) {
 						pr_err("%s: ION memory mapping for AUDIO failed\n",
@@ -672,7 +671,7 @@ int q6asm_audio_client_buf_alloc_contiguous(unsigned int dir,
 		goto fail;
 	}
 	buf[0].handle = ion_alloc(buf[0].client, bufsz * bufcnt, SZ_4K,
-				  (0x1 << ION_AUDIO_HEAP_ID));
+				  (0x1 << ION_AUDIO_HEAP_ID), 0);
 	if (IS_ERR_OR_NULL((void *) buf[0].handle)) {
 		pr_err("%s: ION memory allocation for AUDIO failed\n",
 			__func__);
@@ -689,7 +688,7 @@ int q6asm_audio_client_buf_alloc_contiguous(unsigned int dir,
 		goto fail;
 	}
 
-	buf[0].data = ion_map_kernel(buf[0].client, buf[0].handle, 0);
+	buf[0].data = ion_map_kernel(buf[0].client, buf[0].handle);
 	if (IS_ERR_OR_NULL((void *) buf[0].data)) {
 		pr_err("%s: ION memory mapping for AUDIO failed\n", __func__);
 		mutex_unlock(&ac->cmd_lock);

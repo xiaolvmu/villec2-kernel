@@ -305,7 +305,11 @@ struct msm_camera_i2c_conf {
 	struct platform_device *mux_dev;
 	enum msm_camera_i2c_mux_mode i2c_mux_mode;
 };
-
+enum sensor_mount_angle {
+	ANGLE_90,
+	ANGLE_180,
+	ANGLE_270,
+};
 struct msm_camera_sensor_platform_info {
 	int mount_angle;
 	int sensor_reset;
@@ -323,6 +327,8 @@ struct msm_camera_sensor_platform_info {
 	int privacy_light;
 	enum sensor_flip_mirror_info mirror_flip;
 	void *privacy_light_info;
+	enum sensor_mount_angle sensor_mount_angle; 
+	bool ews_enable;
 	
 };
 
@@ -659,6 +665,7 @@ struct msm_vidc_platform_data {
 	int disable_fullhd;
 	u32 cp_enabled;
 	u32 secure_wb_heap;
+	u32 enable_sec_metadata;
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *vidc_bus_client_pdata;
 #endif
