@@ -22,6 +22,7 @@
 #define V4L2_IDENT_ISPIF			50001
 #define CSID_VERSION_V2                      0x2000011
 
+/* ISPIF registers */
 
 #define ISPIF_RST_CMD_ADDR                        0X00
 #define ISPIF_INTF_CMD_ADDR                       0X04
@@ -42,6 +43,7 @@
 #define ISPIF_IRQ_STATUS_1_ADDR                 0X0114
 #define ISPIF_IRQ_GLOBAL_CLEAR_CMD_ADDR         0x0124
 
+/*ISPIF RESET BITS*/
 
 #define VFE_CLK_DOMAIN_RST           31
 #define RDI_CLK_DOMAIN_RST           30
@@ -115,7 +117,7 @@ static int msm_ispif_intf_reset(uint8_t intfmask)
 		}
 		mask >>= 1;
 		intfnum++;
-	}	
+	}	/*end while */
 	if (rc >= 0) {
 		msm_io_w(data, ispif->base + ISPIF_RST_CMD_ADDR);
 		rc = wait_for_completion_interruptible(&ispif->reset_complete);
@@ -596,7 +598,6 @@ static const struct v4l2_subdev_ops msm_ispif_subdev_ops = {
 	.core = &msm_ispif_subdev_core_ops,
 	.video = &msm_ispif_subdev_video_ops,
 };
-static const struct v4l2_subdev_internal_ops msm_ispif_internal_ops;
 
 static int __devinit ispif_probe(struct platform_device *pdev)
 {
@@ -609,11 +610,6 @@ static int __devinit ispif_probe(struct platform_device *pdev)
 	}
 
 	v4l2_subdev_init(&ispif->subdev, &msm_ispif_subdev_ops);
-	ispif->subdev.internal_ops = &msm_ispif_internal_ops;
-	ispif->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-	snprintf(ispif->subdev.name,
-			ARRAY_SIZE(ispif->subdev.name), "msm_ispif");
-	
 	v4l2_set_subdevdata(&ispif->subdev, ispif);
 	platform_set_drvdata(pdev, &ispif->subdev);
 	snprintf(ispif->subdev.name, sizeof(ispif->subdev.name),
@@ -649,8 +645,6 @@ static int __devinit ispif_probe(struct platform_device *pdev)
 	}
 
 	ispif->pdev = pdev;
-	
-	msm_cam_register_subdev_node(&ispif->subdev, ISPIF_DEV, pdev->id);
 	return 0;
 
 ispif_no_mem:

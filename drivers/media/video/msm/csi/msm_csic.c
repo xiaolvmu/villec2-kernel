@@ -24,6 +24,7 @@
 #define DBG_CSIC 0
 
 #define V4L2_IDENT_CSIC			50004
+/* MIPI	CSI controller registers */
 #define	MIPI_PHY_CONTROL		0x00000000
 #define	MIPI_PROTOCOL_CONTROL		0x00000004
 #define	MIPI_INTERRUPT_STATUS		0x00000008
@@ -41,45 +42,92 @@
 #define	MIPI_PHY_D3_CONTROL		0x00000030
 #define	MIPI_PWR_CNTL			0x00000054
 
+/*
+ * MIPI_PROTOCOL_CONTROL register bits to enable/disable the features of
+ * CSI Rx Block
+ */
 
+/* DPCM scheme */
 #define	MIPI_PROTOCOL_CONTROL_DPCM_SCHEME_SHFT			0x1e
+/* SW_RST to issue a SW reset to the CSI core */
 #define	MIPI_PROTOCOL_CONTROL_SW_RST_BMSK			0x8000000
+/* To Capture Long packet Header Info in MIPI_PROTOCOL_STATUS register */
 #define	MIPI_PROTOCOL_CONTROL_LONG_PACKET_HEADER_CAPTURE_BMSK	0x200000
+/* Data format for unpacking purpose */
 #define	MIPI_PROTOCOL_CONTROL_DATA_FORMAT_SHFT			0x13
-#define	MIPI_PROTOCOL_CONTROL_DECODE_ID_BMSK			0x40000
+/* Enable decoding of payload based on data type filed of packet hdr */
+#define	MIPI_PROTOCOL_CONTROL_DECODE_ID_BMSK			0x00000
+/* Enable error correction on packet headers */
 #define	MIPI_PROTOCOL_CONTROL_ECC_EN_BMSK			0x20000
 
+/*
+ * MIPI_CALIBRATION_CONTROL register contains control info for
+ * calibration impledence controller
+*/
 
+/* Enable bit for calibration pad */
 #define	MIPI_CALIBRATION_CONTROL_SWCAL_CAL_EN_SHFT		0x16
+/* With SWCAL_STRENGTH_OVERRIDE_EN, SW_CAL_EN and MANUAL_OVERRIDE_EN
+ * the hardware calibration circuitry associated with CAL_SW_HW_MODE
+ * is bypassed
+*/
 #define	MIPI_CALIBRATION_CONTROL_SWCAL_STRENGTH_OVERRIDE_EN_SHFT	0x15
+/* To indicate the Calibration process is in the control of HW/SW */
 #define	MIPI_CALIBRATION_CONTROL_CAL_SW_HW_MODE_SHFT		0x14
+/* When this is set the strength value of the data and clk lane impedence
+ * termination is updated with MANUAL_STRENGTH settings and calibration
+ * sensing logic is idle.
+*/
 #define	MIPI_CALIBRATION_CONTROL_MANUAL_OVERRIDE_EN_SHFT	0x7
 
+/* Data lane0 control */
+/* T-hs Settle count value  for Rx */
 #define	MIPI_PHY_D0_CONTROL2_SETTLE_COUNT_SHFT			0x18
+/* Rx termination control */
 #define	MIPI_PHY_D0_CONTROL2_HS_TERM_IMP_SHFT			0x10
+/* LP Rx enable */
 #define	MIPI_PHY_D0_CONTROL2_LP_REC_EN_SHFT			0x4
+/*
+ * Enable for error in sync sequence
+ * 1 - one bit error in sync seq
+ * 0 - requires all 8 bit correct seq
+*/
 #define	MIPI_PHY_D0_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
 
+/* Comments are same as D0 */
 #define	MIPI_PHY_D1_CONTROL2_SETTLE_COUNT_SHFT			0x18
 #define	MIPI_PHY_D1_CONTROL2_HS_TERM_IMP_SHFT			0x10
 #define	MIPI_PHY_D1_CONTROL2_LP_REC_EN_SHFT			0x4
 #define	MIPI_PHY_D1_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
 
+/* Comments are same as D0 */
 #define	MIPI_PHY_D2_CONTROL2_SETTLE_COUNT_SHFT			0x18
 #define	MIPI_PHY_D2_CONTROL2_HS_TERM_IMP_SHFT			0x10
 #define	MIPI_PHY_D2_CONTROL2_LP_REC_EN_SHFT			0x4
 #define	MIPI_PHY_D2_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
 
+/* Comments are same as D0 */
 #define	MIPI_PHY_D3_CONTROL2_SETTLE_COUNT_SHFT			0x18
 #define	MIPI_PHY_D3_CONTROL2_HS_TERM_IMP_SHFT			0x10
 #define	MIPI_PHY_D3_CONTROL2_LP_REC_EN_SHFT			0x4
 #define	MIPI_PHY_D3_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
 
+/* PHY_CL_CTRL programs the parameters of clk lane of CSIRXPHY */
+/* HS Rx termination control */
 #define	MIPI_PHY_CL_CONTROL_HS_TERM_IMP_SHFT			0x18
+/* Start signal for T-hs delay */
 #define	MIPI_PHY_CL_CONTROL_LP_REC_EN_SHFT			0x2
 
+/* PHY DATA lane 0 control */
+/*
+ * HS RX equalizer strength control
+ * 00 - 0db 01 - 3db 10 - 5db 11 - 7db
+*/
 #define	MIPI_PHY_D0_CONTROL_HS_REC_EQ_SHFT			0x1c
+/* PHY DATA lane 1 control */
+/* Shutdown signal for MIPI clk phy line */
 #define	MIPI_PHY_D1_CONTROL_MIPI_CLK_PHY_SHUTDOWNB_SHFT		0x9
+/* Shutdown signal for MIPI data phy line */
 #define	MIPI_PHY_D1_CONTROL_MIPI_DATA_PHY_SHUTDOWNB_SHFT	0x8
 
 #define MSM_AXI_QOS_PREVIEW 200000
@@ -101,7 +149,7 @@ static int msm_csic_config(struct csic_cfg_params *cfg_params)
 	csicbase = csic_dev->base;
 	csic_params = cfg_params->parms;
 
-	
+	/* Enable error correction for DATA lane. Applies to all data lanes */
 	msm_io_w(0x4, csicbase + MIPI_PHY_CONTROL);
 
 	msm_io_w(MIPI_PROTOCOL_CONTROL_SW_RST_BMSK,
@@ -115,7 +163,7 @@ static int msm_csic_config(struct csic_cfg_params *cfg_params)
 	val |= csic_params->dpcm_scheme <<
 		MIPI_PROTOCOL_CONTROL_DPCM_SCHEME_SHFT;
 	CDBG("%s MIPI_PROTOCOL_CONTROL val=0x%x\n", __func__, val);
-	
+	/* Make sure SW_RST is cleared before writing the new value */
 	for (count = 1; count <= 10; count++) {
 		rc = msm_io_r(csicbase + MIPI_PROTOCOL_CONTROL) & MIPI_PROTOCOL_CONTROL_SW_RST_BMSK;
 		if (rc == 0)
@@ -129,7 +177,16 @@ static int msm_csic_config(struct csic_cfg_params *cfg_params)
 	}
 	msm_io_w(val, csicbase + MIPI_PROTOCOL_CONTROL);
 
-	
+	/* Remove by QCT's suggestion for MIPI CSI power leakage issue */
+	/*
+	val = (0x1 << MIPI_CALIBRATION_CONTROL_SWCAL_CAL_EN_SHFT) |
+		(0x1 <<
+		MIPI_CALIBRATION_CONTROL_SWCAL_STRENGTH_OVERRIDE_EN_SHFT) |
+		(0x1 << MIPI_CALIBRATION_CONTROL_CAL_SW_HW_MODE_SHFT) |
+		(0x1 << MIPI_CALIBRATION_CONTROL_MANUAL_OVERRIDE_EN_SHFT);
+	CDBG("%s MIPI_CALIBRATION_CONTROL val=0x%x\n", __func__, val);
+	msm_io_w(val, csicbase + MIPI_CALIBRATION_CONTROL);
+	*/
 
 	val = (csic_params->settle_cnt <<
 		MIPI_PHY_D0_CONTROL2_SETTLE_COUNT_SHFT) |
@@ -138,7 +195,13 @@ static int msm_csic_config(struct csic_cfg_params *cfg_params)
 		(0x1 << MIPI_PHY_D0_CONTROL2_ERR_SOT_HS_EN_SHFT);
 	CDBG("%s MIPI_PHY_D0_CONTROL2 val=0x%x\n", __func__, val);
 
-	
+	/* Change by QCT's suggestion for MIPI CSI power leakage issue */
+	/*
+	msm_io_w(val, csicbase + MIPI_PHY_D0_CONTROL2);
+	msm_io_w(val, csicbase + MIPI_PHY_D1_CONTROL2);
+	msm_io_w(val, csicbase + MIPI_PHY_D2_CONTROL2);
+	msm_io_w(val, csicbase + MIPI_PHY_D3_CONTROL2);
+	*/
 	for(i=0;i < csic_params->lane_cnt;i++)
 		msm_io_w(val, csicbase + MIPI_PHY_D0_CONTROL2 + i*4);
 
@@ -159,7 +222,7 @@ static int msm_csic_config(struct csic_cfg_params *cfg_params)
 	msm_io_w(0x00000000, csicbase + MIPI_PHY_D2_CONTROL);
 	msm_io_w(0x00000000, csicbase + MIPI_PHY_D3_CONTROL);
 
-	
+	/* program number of lanes and lane mapping */
 	switch (csic_params->lane_cnt) {
 	case 1:
 		msm_io_w(csic_params->lane_assign << 8 | 0x4,
@@ -179,9 +242,9 @@ static int msm_csic_config(struct csic_cfg_params *cfg_params)
 		break;
 	}
 
-	msm_io_w(0xF077F3C0, csicbase + MIPI_INTERRUPT_MASK);
-	
-	msm_io_w(0xF077F3C0, csicbase + MIPI_INTERRUPT_STATUS);
+	msm_io_w(0xFFFFF3FF, csicbase + MIPI_INTERRUPT_MASK);
+	/*clear IRQ bits - write 1 clears the status*/
+	msm_io_w(0xFFFFF3FF, csicbase + MIPI_INTERRUPT_STATUS);
 
 	return rc;
 }
@@ -196,7 +259,7 @@ static irqreturn_t msm_csic_irq(int irq_num, void *data)
 	pr_info("%s MIPI_INTERRUPT_STATUS = 0x%x\n", __func__, irq);
 	msm_io_w(irq, csic_dev->base + MIPI_INTERRUPT_STATUS);
 
-	
+	/* TODO: Needs to send this info to upper layers */
 	if ((irq >> 19) & 0x1)
 		pr_info("Unsupported packet format is received\n");
 	return IRQ_HANDLED;
@@ -278,9 +341,7 @@ static int msm_csic_init(struct v4l2_subdev *sd, uint32_t *csic_version)
 	rc = msm_cam_clk_enable(&csic_dev->pdev->dev, csic_clk_info,
 		csic_dev->csic_clk, ARRAY_SIZE(csic_clk_info), 1);
 	if (rc < 0) {
-		csic_dev->hw_version = 0;
 		iounmap(csic_dev->base);
-		csic_dev->base = NULL;
 		return rc;
 	}
 
@@ -314,10 +375,6 @@ static void msm_csic_disable(struct csic_device *csic_dev)
 		usleep_range(5000, 6000);
 		msm_io_w(0x0, csic_dev->base + MIPI_INTERRUPT_MASK);
 		msm_io_w(0x0, csic_dev->base + MIPI_INTERRUPT_STATUS);
-		msm_io_w(MIPI_PROTOCOL_CONTROL_SW_RST_BMSK,
-			csic_dev->base + MIPI_PROTOCOL_CONTROL);
-
-		msm_io_w(0xE400, csic_dev->base + MIPI_CAMERA_CNTL);
 	}
 }
 
@@ -366,8 +423,6 @@ static const struct v4l2_subdev_ops msm_csic_subdev_ops = {
 	.core = &msm_csic_subdev_core_ops,
 };
 
-static const struct v4l2_subdev_internal_ops msm_csic_internal_ops;
-
 static int __devinit csic_probe(struct platform_device *pdev)
 {
 	struct csic_device *new_csic_dev;
@@ -380,11 +435,6 @@ static int __devinit csic_probe(struct platform_device *pdev)
 	}
 
 	v4l2_subdev_init(&new_csic_dev->subdev, &msm_csic_subdev_ops);
-	new_csic_dev->subdev.internal_ops = &msm_csic_internal_ops;
-	new_csic_dev->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-	snprintf(new_csic_dev->subdev.name,
-			ARRAY_SIZE(new_csic_dev->subdev.name), "msm_csic");
-
 	v4l2_set_subdevdata(&new_csic_dev->subdev, new_csic_dev);
 	platform_set_drvdata(pdev, &new_csic_dev->subdev);
 	mutex_init(&new_csic_dev->mutex);
@@ -421,9 +471,6 @@ static int __devinit csic_probe(struct platform_device *pdev)
 		goto csic_no_resource;
 	}
 	disable_irq(new_csic_dev->irq->start);
-
-	new_csic_dev->pdev = pdev;
-
 	msm_cam_clk_enable(&pdev->dev, csic_clk_info,
 		new_csic_dev->csic_clk, ARRAY_SIZE(csic_clk_info), 1);
 	new_csic_dev->base = ioremap(new_csic_dev->mem->start,
@@ -433,15 +480,12 @@ static int __devinit csic_probe(struct platform_device *pdev)
 		goto csic_no_resource;
 	}
 
-	msm_io_w(MIPI_PWR_CNTL_DIS, new_csic_dev->base + MIPI_PWR_CNTL);
+	msm_io_w(MIPI_PWR_CNTL_DIS, new_csic_dev->base + MIPI_PWR_CNTL_DIS);
 	msm_cam_clk_enable(&pdev->dev, csic_clk_info,
 		new_csic_dev->csic_clk, ARRAY_SIZE(csic_clk_info), 0);
 	iounmap(new_csic_dev->base);
 
-	new_csic_dev->base = NULL;
-	msm_cam_register_subdev_node(
-		&new_csic_dev->subdev, CSIC_DEV, pdev->id);
-
+	new_csic_dev->pdev = pdev;
 	return 0;
 
 csic_no_resource:
