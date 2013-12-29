@@ -31,7 +31,7 @@ struct msm_gemini_hw_buf {
 };
 
 struct msm_gemini_hw_pingpong {
-	uint8_t is_fe; 
+	uint8_t is_fe; /* 1: fe; 0: we */
 	struct  msm_gemini_hw_buf buf[2];
 	int     buf_status[2];
 	int     buf_active_index;
@@ -97,8 +97,8 @@ void msm_gemini_hw_delay(struct msm_gemini_hw_cmd *hw_cmd_p, int m_us);
 int msm_gemini_hw_exec_cmds(struct msm_gemini_hw_cmd *hw_cmd_p, int m_cmds);
 void msm_gemini_hw_region_dump(int size);
 
-#define MSM_GEMINI_PIPELINE_CLK_128MHZ 128 
-#define MSM_GEMINI_PIPELINE_CLK_140MHZ 140 
-#define MSM_GEMINI_PIPELINE_CLK_200MHZ 153 
+#define MSM_GEMINI_PIPELINE_CLK_128MHZ 128 /* 8MP  128MHz */
+#define MSM_GEMINI_PIPELINE_CLK_140MHZ 140 /* 9MP  140MHz */
+#define MSM_GEMINI_PIPELINE_CLK_200MHZ 153 /* 12MP 153MHz */
 
-#endif 
+#endif /* MSM_GEMINI_HW_H */
