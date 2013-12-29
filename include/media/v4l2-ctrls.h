@@ -24,7 +24,6 @@
 #include <linux/list.h>
 #include <linux/device.h>
 #include <linux/videodev2.h>
-#include <linux/mutex.h>
 
 struct v4l2_ctrl_handler;
 struct v4l2_ctrl;

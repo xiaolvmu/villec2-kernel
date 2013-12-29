@@ -54,27 +54,28 @@
 #define RAWCHIP_IOCTL_UPDATE_3A \
 	_IOW(RAWCHIP_IOCTL_MAGIC, 5, struct rawchip_stats_event_ctrl *)
 
+#ifdef CONFIG_MSM_CAMERA_V4L2
 #define RAWCHIP_IOCTL_SET_DXOPRC_AF_STRATEGY \
 	_IOW(RAWCHIP_IOCTL_MAGIC, 6, struct rawchip_stats_event_ctrl *)
 
 #define RAWCHIP_IOCTL_GET_DXOPRC_VER\
 	_IOW(RAWCHIP_IOCTL_MAGIC, 7, struct rawchip_stats_event_ctrl *)
-	
+
 #define RAWCHIP_IOCTL_GET_DXOPRC_FRAMESETTING\
 	_IOW(RAWCHIP_IOCTL_MAGIC, 8, struct rawchip_stats_event_ctrl *)
-	
+
 typedef struct
-{	
+{
 	uint8_t 	orientation;
 	uint16_t	xStart;
 	uint16_t	yStart;
 	uint16_t	xEnd;
 	uint16_t	yEnd;
-	uint16_t	xEvenInc;  
+	uint16_t	xEvenInc;
 	uint16_t	xOddInc;
-	uint16_t	yEvenInc;  
+	uint16_t	yEvenInc;
 	uint16_t	yOddInc;
-	uint8_t 	binning;	
+	uint8_t 	binning;
 } rawchip_dxo_frameSetting ;
 
 typedef struct {
@@ -85,11 +86,21 @@ typedef struct {
 	uint16_t 	udwDPPUcodeId;
 	uint16_t 	udwDPPHwId;
 	uint32_t 	udwDPPCalibId;
-	
+
 	uint16_t 	udwPDPUcodeId;
 	uint16_t 	udwPDPHwId;
 	uint32_t 	udwPDPCalibId;
 } rawchip_dxo_version;
+
+typedef struct
+{
+	uint32_t 	udwAfStatsGreen;
+	uint32_t 	udwAfStatsRed;
+	uint32_t 	udwAfStatsBlue;
+	uint32_t 	udwAfStatsConfidence;
+	uint16_t  frameIdx;
+}Yushan_AF_Stats_t;
+#endif // CONFIG_MSM_CAMERA_V4L2
 
 struct rawchip_stats_event_ctrl {
 	uint32_t type;
@@ -98,5 +109,5 @@ struct rawchip_stats_event_ctrl {
 	void *data;
 };
 
-#endif 
+#endif /* __LINUX_RAWCHIP_H */
 
