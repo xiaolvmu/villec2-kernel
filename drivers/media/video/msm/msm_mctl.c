@@ -494,8 +494,8 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 
 		dev = driver_find_device(driver, NULL, 0,
 				msm_mctl_subdev_match_core);
-	//	if (!dev)
-		//	goto out_put_driver;
+		if (!dev)
+			goto out;
 
 		p_mctl->isp_sdev->sd_vpe = dev_get_drvdata(dev);
 	//	put_driver(driver);

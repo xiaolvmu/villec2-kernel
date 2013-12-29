@@ -18,7 +18,7 @@
 #include <linux/spinlock.h>
 #include <linux/videodev2.h>
 #include <linux/vmalloc.h>
-
+#include <linux/msm_ion.h>
 #include <media/v4l2-dev.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-device.h>
@@ -565,6 +565,12 @@ int msm_mctl_reserve_free_buf(
 				"ch1 addr=0x%x\n", __func__,
 				pcam_inst, buf->vidbuf.v4l2_buf.index,
 				free_buf->ch_paddr[0], free_buf->ch_paddr[1]);
+		}
+		/*invalidate cache if required*/
+		if (mem && (ION_IS_CACHED(mem->ion_flags) == 1)) {
+			D("%s do caching 0x%lX, size = %ld\n", __func__, (unsigned long)mem->kernel_vaddr, mem->size);
+			invalidate_caches((unsigned long)mem->kernel_vaddr,
+			mem->size, (unsigned long)mem->phyaddr);
 		}
 		rc = 0;
 		break;
