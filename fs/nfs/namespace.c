@@ -172,7 +172,7 @@ static struct rpc_clnt *nfs_lookup_mountpoint(struct inode *dir,
 		return ERR_PTR(err);
 	return rpc_clone_client(NFS_SERVER(dir)->client);
 }
-#else 
+#else /* CONFIG_NFS_V4 */
 static inline struct rpc_clnt *nfs_lookup_mountpoint(struct inode *dir,
 						     struct qstr *name,
 						     struct nfs_fh *fh,
@@ -183,8 +183,20 @@ static inline struct rpc_clnt *nfs_lookup_mountpoint(struct inode *dir,
 		return ERR_PTR(err);
 	return rpc_clone_client(NFS_SERVER(dir)->client);
 }
-#endif 
+#endif /* CONFIG_NFS_V4 */
 
+/*
+ * nfs_d_automount - Handle crossing a mountpoint on the server
+ * @path - The mountpoint
+ *
+ * When we encounter a mountpoint on the server, we want to set up
+ * a mountpoint on the client too, to prevent inode numbers from
+ * colliding, and to allow "df" to work properly.
+ * On NFSv4, we also want to allow for the fact that different
+ * filesystems may be migrated to different servers in a failover
+ * situation, and that different filesystems may want to use
+ * different security flavours.
+ */
 struct vfsmount *nfs_d_automount(struct path *path)
 {
 	struct vfsmount *mnt;
@@ -207,7 +219,7 @@ struct vfsmount *nfs_d_automount(struct path *path)
 
 	dprintk("%s: enter\n", __func__);
 
-	
+	/* Look it up again to get its attributes */
 	parent = dget_parent(path->dentry);
 	client = nfs_lookup_mountpoint(parent->d_inode, &path->dentry->d_name, fh, fattr);
 	dput(parent);
@@ -226,7 +238,7 @@ struct vfsmount *nfs_d_automount(struct path *path)
 		goto out;
 
 	dprintk("%s: done, success\n", __func__);
-	mntget(mnt); 
+	mntget(mnt); /* prevent immediate expiration */
 	mnt_set_expiry(mnt, &nfs_automount_list);
 	schedule_delayed_work(&nfs_automount_task, nfs_mountpoint_expiry_timeout);
 
@@ -283,6 +295,9 @@ void nfs_release_automount_timer(void)
 		cancel_delayed_work(&nfs_automount_task);
 }
 
+/*
+ * Clone a mountpoint of the appropriate type
+ */
 static struct vfsmount *nfs_do_clone_mount(struct nfs_server *server,
 					   const char *devname,
 					   struct nfs_clone_mount *mountdata)
@@ -303,6 +318,14 @@ static struct vfsmount *nfs_do_clone_mount(struct nfs_server *server,
 #endif
 }
 
+/**
+ * nfs_do_submount - set up mountpoint when crossing a filesystem boundary
+ * @dentry - parent directory
+ * @fh - filehandle for new root dentry
+ * @fattr - attributes for new root inode
+ * @authflavor - security flavor to use when performing the mount
+ *
+ */
 static struct vfsmount *nfs_do_submount(struct dentry *dentry,
 					struct nfs_fh *fh,
 					struct nfs_fattr *fattr,
