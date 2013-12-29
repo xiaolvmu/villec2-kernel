@@ -111,7 +111,7 @@ static inline void freezer_count(void)
  * state is reached.  IOW, if this function returns %true, @p is considered
  * frozen enough.
  */
-static inline bool freezer_should_skip(struct task_struct *p)
+static inline int freezer_should_skip(struct task_struct *p)
 {
 	/*
 	 * The following smp_mb() paired with the one in freezer_count()
@@ -120,8 +120,7 @@ static inline bool freezer_should_skip(struct task_struct *p)
 	 * impossible for a task to slip frozen state testing after
 	 * clearing %PF_FREEZER_SKIP.
 	 */
-	smp_mb();
-	return p->flags & PF_FREEZER_SKIP;
+	return !!(p->flags & PF_FREEZER_SKIP);
 }
 
 

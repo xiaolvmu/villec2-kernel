@@ -63,9 +63,6 @@ static struct kernel_param_ops param_ops_portnr = {
 
 module_param_named(callback_tcpport, nfs_callback_set_tcpport, portnr, 0644);
 
-/*
- * This is the NFSv4 callback kernel thread.
- */
 static int
 nfs4_callback_svc(void *vrqstp)
 {
@@ -75,9 +72,6 @@ nfs4_callback_svc(void *vrqstp)
 	set_freezable();
 
 	while (!kthread_should_stop()) {
-		/*
-		 * Listen for a request on the socket
-		 */
 		err = svc_recv(rqstp, MAX_SCHEDULE_TIMEOUT);
 		if (err == -EAGAIN || err == -EINTR) {
 			preverr = err;
@@ -98,9 +92,6 @@ nfs4_callback_svc(void *vrqstp)
 	return 0;
 }
 
-/*
- * Prepare to bring up the NFSv4 callback service
- */
 static struct svc_rqst *
 nfs4_callback_up(struct svc_serv *serv, struct rpc_xprt *xprt)
 {
@@ -134,9 +125,6 @@ out_err:
 }
 
 #if defined(CONFIG_NFS_V4_1)
-/*
- * The callback service for NFSv4.1 callbacks
- */
 static int
 nfs41_callback_svc(void *vrqstp)
 {
@@ -169,20 +157,12 @@ nfs41_callback_svc(void *vrqstp)
 	return 0;
 }
 
-/*
- * Bring up the NFSv4.1 callback service
- */
 static struct svc_rqst *
 nfs41_callback_up(struct svc_serv *serv, struct rpc_xprt *xprt)
 {
 	struct svc_rqst *rqstp;
 	int ret;
 
-	/*
-	 * Create an svc_sock for the back channel service that shares the
-	 * fore channel connection.
-	 * Returns the input port (0) and sets the svc_serv bc_xprt on success
-	 */
 	ret = svc_create_xprt(serv, "tcp-bc", &init_net, PF_INET, 0,
 			      SVC_SOCK_ANONYMOUS);
 	if (ret < 0) {
@@ -190,10 +170,6 @@ nfs41_callback_up(struct svc_serv *serv, struct rpc_xprt *xprt)
 		goto out;
 	}
 
-	/*
-	 * Save the svc_serv in the transport so that it can
-	 * be referenced when the session backchannel is initialized
-	 */
 	xprt->bc_serv = serv;
 
 	INIT_LIST_HEAD(&serv->sv_cb_list);
@@ -239,11 +215,8 @@ static inline void nfs_callback_bc_serv(u32 minorversion, struct rpc_xprt *xprt,
 		struct nfs_callback_data *cb_info)
 {
 }
-#endif /* CONFIG_NFS_V4_1 */
+#endif 
 
-/*
- * Bring up the callback thread if it is not already up.
- */
 int nfs_callback_up(u32 minorversion, struct rpc_xprt *xprt)
 {
 	struct svc_serv *serv = NULL;
@@ -275,7 +248,7 @@ int nfs_callback_up(u32 minorversion, struct rpc_xprt *xprt)
 	minorversion_setup =  nfs_minorversion_callback_svc_setup(minorversion,
 					serv, xprt, &rqstp, &callback_svc);
 	if (!minorversion_setup) {
-		/* v4.0 callback setup */
+		
 		rqstp = nfs4_callback_up(serv, xprt);
 		callback_svc = nfs4_callback_svc;
 	}
@@ -299,12 +272,6 @@ int nfs_callback_up(u32 minorversion, struct rpc_xprt *xprt)
 		goto out_err;
 	}
 out:
-	/*
-	 * svc_create creates the svc_serv with sv_nrthreads == 1, and then
-	 * svc_prepare_thread increments that. So we need to call svc_destroy
-	 * on both success and failure so that the refcount is 1 when the
-	 * thread exits.
-	 */
 	if (serv)
 		svc_destroy(serv);
 	mutex_unlock(&nfs_callback_mutex);
@@ -318,9 +285,6 @@ out_err:
 	goto out;
 }
 
-/*
- * Kill the callback thread if it's no longer being used.
- */
 void nfs_callback_down(int minorversion)
 {
 	struct nfs_callback_data *cb_info = &nfs_callback_info[minorversion];
@@ -338,7 +302,6 @@ void nfs_callback_down(int minorversion)
 	mutex_unlock(&nfs_callback_mutex);
 }
 
-/* Boolean check of RPC_AUTH_GSS principal */
 int
 check_gss_callback_principal(struct nfs_client *clp, struct svc_rqst *rqstp)
 {
@@ -347,17 +310,13 @@ check_gss_callback_principal(struct nfs_client *clp, struct svc_rqst *rqstp)
 	if (rqstp->rq_authop->flavour != RPC_AUTH_GSS)
 		return 1;
 
-	/* No RPC_AUTH_GSS on NFSv4.1 back channel yet */
+	
 	if (clp->cl_minorversion != 0)
 		return 0;
-	/*
-	 * It might just be a normal user principal, in which case
-	 * userspace won't bother to tell us the name at all.
-	 */
 	if (p == NULL)
 		return 0;
 
-	/* Expect a GSS_C_NT_HOSTBASED_NAME like "nfs@serverhostname" */
+	
 
 	if (memcmp(p, "nfs@", 4) != 0)
 		return 0;
@@ -367,15 +326,6 @@ check_gss_callback_principal(struct nfs_client *clp, struct svc_rqst *rqstp)
 	return 1;
 }
 
-/*
- * pg_authenticate method for nfsv4 callback threads.
- *
- * The authflavor has been negotiated, so an incorrect flavor is a server
- * bug. Drop packets with incorrect authflavor.
- *
- * All other checking done after NFS decoding where the nfs_client can be
- * found in nfs4_callback_compound
- */
 static int nfs_callback_authenticate(struct svc_rqst *rqstp)
 {
 	switch (rqstp->rq_authop->flavour) {
@@ -384,16 +334,13 @@ static int nfs_callback_authenticate(struct svc_rqst *rqstp)
 			return SVC_DROP;
 		break;
 	case RPC_AUTH_GSS:
-		/* No RPC_AUTH_GSS support yet in NFSv4.1 */
+		
 		 if (svc_is_backchannel(rqstp))
 			return SVC_DROP;
 	}
 	return SVC_OK;
 }
 
-/*
- * Define NFS4 callback program
- */
 static struct svc_version *nfs4_callback_version[] = {
 	[1] = &nfs4_callback_version1,
 	[4] = &nfs4_callback_version4,
@@ -402,11 +349,11 @@ static struct svc_version *nfs4_callback_version[] = {
 static struct svc_stat nfs4_callback_stats;
 
 static struct svc_program nfs4_callback_program = {
-	.pg_prog = NFS4_CALLBACK,			/* RPC service number */
-	.pg_nvers = ARRAY_SIZE(nfs4_callback_version),	/* Number of entries */
-	.pg_vers = nfs4_callback_version,		/* version table */
-	.pg_name = "NFSv4 callback",			/* service name */
-	.pg_class = "nfs",				/* authentication class */
+	.pg_prog = NFS4_CALLBACK,			
+	.pg_nvers = ARRAY_SIZE(nfs4_callback_version),	
+	.pg_vers = nfs4_callback_version,		
+	.pg_name = "NFSv4 callback",			
+	.pg_class = "nfs",				
 	.pg_stats = &nfs4_callback_stats,
 	.pg_authenticate = nfs_callback_authenticate,
 };

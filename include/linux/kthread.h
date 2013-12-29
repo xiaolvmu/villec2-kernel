@@ -32,14 +32,6 @@ int kthreadd(void *unused);
 extern struct task_struct *kthreadd_task;
 extern int tsk_fork_get_node(struct task_struct *tsk);
 
-/*
- * Simple work processor based on kthread.
- *
- * This provides easier way to make use of kthreads.  A kthread_work
- * can be queued and flushed using queue/flush_kthread_work()
- * respectively.  Queued kthread_works are processed by a kthread
- * running kthread_worker_fn().
- */
 struct kthread_work;
 typedef void (*kthread_work_func_t)(struct kthread_work *work);
 
@@ -47,14 +39,15 @@ struct kthread_worker {
 	spinlock_t		lock;
 	struct list_head	work_list;
 	struct task_struct	*task;
-	struct kthread_work	*current_work;
 };
 
 struct kthread_work {
 	struct list_head	node;
 	kthread_work_func_t	func;
 	wait_queue_head_t	done;
-	struct kthread_worker	*worker;
+	atomic_t		flushing;
+	int			queue_seq;
+	int			done_seq;
 };
 
 #define KTHREAD_WORKER_INIT(worker)	{				\
@@ -66,6 +59,7 @@ struct kthread_work {
 	.node = LIST_HEAD_INIT((work).node),				\
 	.func = (fn),							\
 	.done = __WAIT_QUEUE_HEAD_INITIALIZER((work).done),		\
+	.flushing = ATOMIC_INIT(0),					\
 	}
 
 #define DEFINE_KTHREAD_WORKER(worker)					\

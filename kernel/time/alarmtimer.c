@@ -59,7 +59,7 @@ static DEFINE_SPINLOCK(rtcdev_lock);
  * If one has not already been chosen, it checks to see if a
  * functional rtc device is available.
  */
-struct rtc_device *alarmtimer_get_rtcdev(void)
+static struct rtc_device *alarmtimer_get_rtcdev(void)
 {
 	unsigned long flags;
 	struct rtc_device *ret;
@@ -115,7 +115,7 @@ static void alarmtimer_rtc_interface_remove(void)
 	class_interface_unregister(&alarmtimer_rtc_interface);
 }
 #else
-struct rtc_device *alarmtimer_get_rtcdev(void)
+static inline struct rtc_device *alarmtimer_get_rtcdev(void)
 {
 	return NULL;
 }
@@ -474,7 +474,7 @@ static int alarm_clock_getres(const clockid_t which_clock, struct timespec *tp)
 	clockid_t baseid = alarm_bases[clock2alarm(which_clock)].base_clockid;
 
 	if (!alarmtimer_get_rtcdev())
-		return -EINVAL;
+		return -ENOTSUPP;
 
 	return hrtimer_get_res(baseid, tp);
 }
@@ -491,7 +491,7 @@ static int alarm_clock_get(clockid_t which_clock, struct timespec *tp)
 	struct alarm_base *base = &alarm_bases[clock2alarm(which_clock)];
 
 	if (!alarmtimer_get_rtcdev())
-		return -EINVAL;
+		return -ENOTSUPP;
 
 	*tp = ktime_to_timespec(base->gettime());
 	return 0;

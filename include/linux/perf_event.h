@@ -527,7 +527,7 @@ struct perf_event {
 	struct hw_perf_event		hw;
 
 	struct perf_event_context	*ctx;
-	atomic_long_t			refcount;
+	struct file			*filp;
 
 	atomic64_t			child_total_time_enabled;
 	atomic64_t			child_total_time_running;
@@ -545,7 +545,8 @@ struct perf_event {
 	
 	struct mutex			mmap_mutex;
 	atomic_t			mmap_count;
-
+	int				mmap_locked;
+	struct user_struct		*mmap_user;
 	struct ring_buffer		*rb;
 	struct list_head		rb_entry;
 
@@ -630,7 +631,7 @@ struct perf_cpu_context {
 	int				exclusive;
 	struct list_head		rotation_list;
 	int				jiffies_interval;
-	struct pmu			*unique_pmu;
+	struct pmu			*active_pmu;
 	struct perf_cgroup		*cgrp;
 };
 
@@ -882,12 +883,6 @@ static inline void perf_swevent_put_recursion_context(int rctx)		{ }
 static inline void perf_event_enable(struct perf_event *event)		{ }
 static inline void perf_event_disable(struct perf_event *event)		{ }
 static inline void perf_event_task_tick(void)				{ }
-#endif
-
-#if defined(CONFIG_PERF_EVENTS) && defined(CONFIG_CPU_SUP_INTEL)
-extern void perf_restore_debug_store(void);
-#else
-static inline void perf_restore_debug_store(void)			{ }
 #endif
 
 #define perf_output_put(handle, x) perf_output_copy((handle), &(x), sizeof(x))

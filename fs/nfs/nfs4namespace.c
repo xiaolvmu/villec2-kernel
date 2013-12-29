@@ -22,11 +22,6 @@
 
 #define NFSDBG_FACILITY		NFSDBG_VFS
 
-/*
- * Convert the NFSv4 pathname components into a standard posix path.
- *
- * Note that the resulting string will be placed at the end of the buffer
- */
 static inline char *nfs4_pathname_string(const struct nfs4_pathname *pathname,
 					 char *buffer, ssize_t buflen)
 {
@@ -51,23 +46,17 @@ Elong:
 	return ERR_PTR(-ENAMETOOLONG);
 }
 
-/*
- * return the path component of "<server>:<path>"
- *  nfspath - the "<server>:<path>" string
- *  end - one past the last char that could contain "<server>:"
- * returns NULL on failure
- */
 static char *nfs_path_component(const char *nfspath, const char *end)
 {
 	char *p;
 
 	if (*nfspath == '[') {
-		/* parse [] escaped IPv6 addrs */
+		
 		p = strchr(nfspath, ']');
 		if (p != NULL && ++p < end && *p == ':')
 			return p + 1;
 	} else {
-		/* otherwise split on first colon */
+		
 		p = strchr(nfspath, ':');
 		if (p != NULL && p < end)
 			return p + 1;
@@ -75,14 +64,10 @@ static char *nfs_path_component(const char *nfspath, const char *end)
 	return NULL;
 }
 
-/*
- * Determine the mount path as a string
- */
 static char *nfs4_path(struct dentry *dentry, char *buffer, ssize_t buflen)
 {
 	char *limit;
-	char *path = nfs_path(&limit, dentry, buffer, buflen,
-			      NFS_PATH_CANONICAL);
+	char *path = nfs_path(&limit, dentry, buffer, buflen);
 	if (!IS_ERR(path)) {
 		char *path_component = nfs_path_component(path, limit);
 		if (path_component)
@@ -91,10 +76,6 @@ static char *nfs4_path(struct dentry *dentry, char *buffer, ssize_t buflen)
 	return path;
 }
 
-/*
- * Check that fs_locations::fs_root [RFC3530 6.3] is a prefix for what we
- * believe to be the server path to this dentry
- */
 static int nfs4_validate_fspath(struct dentry *dentry,
 				const struct nfs4_fs_locations *locations,
 				char *page, char *page2)
@@ -158,9 +139,6 @@ out:
 	return flavor;
 }
 
-/*
- * Please call rpc_shutdown_client() when you are done with this client.
- */
 struct rpc_clnt *nfs4_create_sec_client(struct rpc_clnt *clnt, struct inode *inode,
 					struct qstr *name)
 {
@@ -238,12 +216,6 @@ static struct vfsmount *try_location(struct nfs_clone_mount *mountdata,
 	return mnt;
 }
 
-/**
- * nfs_follow_referral - set up mountpoint when hitting a referral on moved error
- * @dentry - parent directory
- * @locations - array of NFSv4 server location information
- *
- */
 static struct vfsmount *nfs_follow_referral(struct dentry *dentry,
 					    const struct nfs4_fs_locations *locations)
 {
@@ -270,7 +242,7 @@ static struct vfsmount *nfs_follow_referral(struct dentry *dentry,
 	if (!page2)
 		goto out;
 
-	/* Ensure fs path is a prefix of current dentry path */
+	
 	error = nfs4_validate_fspath(dentry, locations, page, page2);
 	if (error < 0) {
 		mnt = ERR_PTR(error);
@@ -296,11 +268,6 @@ out:
 	return mnt;
 }
 
-/*
- * nfs_do_refmount - handle crossing a referral on server
- * @dentry - dentry of referral
- *
- */
 struct vfsmount *nfs_do_refmount(struct rpc_clnt *client, struct dentry *dentry)
 {
 	struct vfsmount *mnt = ERR_PTR(-ENOMEM);
@@ -309,7 +276,7 @@ struct vfsmount *nfs_do_refmount(struct rpc_clnt *client, struct dentry *dentry)
 	struct page *page;
 	int err;
 
-	/* BUG_ON(IS_ROOT(dentry)); */
+	
 	dprintk("%s: enter\n", __func__);
 
 	page = alloc_page(GFP_KERNEL);
@@ -320,7 +287,7 @@ struct vfsmount *nfs_do_refmount(struct rpc_clnt *client, struct dentry *dentry)
 	if (fs_locations == NULL)
 		goto out_free;
 
-	/* Get locations */
+	
 	mnt = ERR_PTR(-ENOENT);
 
 	parent = dget_parent(dentry);
