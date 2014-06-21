@@ -424,8 +424,6 @@ static void projector_report_key_event(struct projector_dev *dev,
 	input_sync(kdev);
 }
 
-extern char *get_fb_addr(void);
-
 static void send_fb(struct projector_dev *dev)
 {
 
@@ -436,8 +434,6 @@ static void send_fb(struct projector_dev *dev)
 
 	if (projector_dev->htcmode_proto->debug_mode)
 		frame = (char *)test_frame;
-	else
-		frame = get_fb_addr();
 
 	if (frame == NULL) {
 		printk(KERN_WARNING "send_fb: frame == NULL\n");
@@ -532,8 +528,6 @@ static void send_fb2(struct projector_dev *dev)
 
 	if (projector_dev->htcmode_proto->debug_mode)
 		frame = (char *)test_frame;
-	else
-		frame = get_fb_addr();
 
 	if (frame == NULL)
 		return;
