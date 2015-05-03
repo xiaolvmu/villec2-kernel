@@ -1,0 +1,25 @@
+#
+# Makefile for the HTC board
+#
+
+# ELITE
+obj-$(CONFIG_MACH_ELITE) += elite/
+
+# FIGHTER
+obj-$(CONFIG_MACH_FIGHTER) += fighter/
+
+# JET
+obj-$(CONFIG_MACH_JET) += jet/
+
+# VILLE
+obj-$(CONFIG_MACH_VILLE) += ville/
+
+# M7
+obj-$(CONFIG_MACH_M7_UL) += m7/
+
+# M4
+obj-$(CONFIG_MACH_M4_UL) += m4/
+
+# VILLEC2
+obj-$(CONFIG_MACH_VILLEC2) += villec2/
+
