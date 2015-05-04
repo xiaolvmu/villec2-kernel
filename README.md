@@ -8,3 +8,7 @@ So I think the best way for now is to porting Pyramid kernel. Also, pyramid kern
 
 # L-Day
 Maybe today is L-Day :)
+
+# Credits
+@ivanich for the Pyramid kernel(brunch cm-12.1). He's a great developer!  
+@Sultanxda for help. Without his help, I don't almost know how to solve the errors when compiling.
