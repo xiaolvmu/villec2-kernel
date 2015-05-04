@@ -10,5 +10,5 @@ So I think the best way for now is to porting Pyramid kernel. Also, pyramid kern
 Maybe today is L-Day :)
 
 # Credits
-@ivanich for the Pyramid kernel(brunch cm-12.1). He's a great developer!  
+@ivanich for the Pyramid kernel(brunch cm-12.1). He's a great developer! 99% is his work.  
 @Sultanxda for help. Without his help, I don't almost know how to solve the errors when compiling.
