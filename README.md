@@ -16,5 +16,5 @@ Maybe today is L-Day :)
 @DogukanErgun for the bootloop fix.
 
 # Future
-Now this kernel is still in the early testing.
+Now this kernel is still in the early testing.  
 So if I'm sure it works, I'll fork it to @TeamVilleC2 GitHub Group.
