@@ -14,3 +14,7 @@ Maybe today is L-Day :)
 @Sultanxda for help. Without his help, I don't almost know how to solve the errors when compiling.
 @Flemmard for the ramdisk fix.
 @DogukanErgun for the bootloop fix.
+
+# Future
+Now this kernel is still in the early testing.
+So if I'm sure it works, I'll fork it to @TeamVilleC2 GitHub Group.
