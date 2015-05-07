@@ -2633,6 +2633,12 @@ config MSM_NONSMD_PACKET_FILTER
 	  The white TCP port list is updated in attribute
 	  repying on RIL to notify modem.
 
+config FORCE_FAST_CHARGE
+	bool "Force AC charge mode at will"
+	default y
+	help
+	  The simple fast charge plugin.
+
 config IO_FOOTPRINT
 	bool "Trace I/O for each CPU"
 	default n
