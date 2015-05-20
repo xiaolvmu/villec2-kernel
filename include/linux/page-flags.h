@@ -252,25 +252,9 @@ static inline void ClearPageCompound(struct page *page)
 #endif
 #else
 TESTPAGEFLAG(Compound, compound)
-__SETPAGEFLAG(Head, compound)  __CLEARPAGEFLAG(Head, compound)
+__PAGEFLAG(Head, compound)
 
-/*
- * PG_reclaim is used in combination with PG_compound to mark the
- * head and tail of a compound page. This saves one page flag
- * but makes it impossible to use compound pages for the page cache.
- * The PG_reclaim bit would have to be used for reclaim or readahead
- * if compound pages enter the page cache.
- *
- * PG_compound & PG_reclaim	=> Tail page
- * PG_compound & ~PG_reclaim	=> Head page
- */
-#define PG_head_mask ((1L << PG_compound))
 #define PG_head_tail_mask ((1L << PG_compound) | (1L << PG_reclaim))
-
-static inline int PageHead(struct page *page)
-{
-	return ((page->flags & PG_head_tail_mask) == PG_head_mask);
-}
 
 static inline int PageTail(struct page *page)
 {

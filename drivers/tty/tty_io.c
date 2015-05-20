@@ -676,28 +676,6 @@ void start_tty(struct tty_struct *tty)
 
 EXPORT_SYMBOL(start_tty);
 
-/* We limit tty time update visibility to every 8 seconds or so. */
-static void tty_update_time(struct timespec *time)
-{
-	unsigned long sec = get_seconds() & ~7;
-	if ((long)(sec - time->tv_sec) > 0)
-		time->tv_sec = sec;
-}
-
-/**
- *	tty_read	-	read method for tty device files
- *	@file: pointer to tty file
- *	@buf: user buffer
- *	@count: size of user buffer
- *	@ppos: unused
- *
- *	Perform the read system call function on this terminal device. Checks
- *	for hung up devices before calling the line discipline method.
- *
- *	Locking:
- *		Locks the line discipline internally while needed. Multiple
- *	read calls may be outstanding in parallel.
- */
 
 static ssize_t tty_read(struct file *file, char __user *buf, size_t count,
 			loff_t *ppos)
@@ -718,10 +696,8 @@ static ssize_t tty_read(struct file *file, char __user *buf, size_t count,
 	else
 		i = -EIO;
 	tty_ldisc_deref(ld);
-
 	if (i > 0)
-		tty_update_time(&inode->i_atime);
-
+		inode->i_atime = current_fs_time(inode->i_sb);
 	return i;
 }
 
@@ -804,7 +780,7 @@ static inline ssize_t do_tty_write(
 	}
 	if (written) {
 		struct inode *inode = file->f_path.dentry->d_inode;
-		tty_update_time(&inode->i_mtime);
+		inode->i_mtime = current_fs_time(inode->i_sb);
 		ret = written;
 	}
 out:

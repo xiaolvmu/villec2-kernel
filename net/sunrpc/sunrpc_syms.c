@@ -94,8 +94,8 @@ init_sunrpc(void)
 #ifdef RPC_DEBUG
 	rpc_register_sysctl();
 #endif
-	svc_init_xprt_sock();	/* svc sock transport */
-	init_socket_xprt();	/* clnt sock transport */
+	svc_init_xprt_sock();	
+	init_socket_xprt();	
 	return 0;
 
 out4:
@@ -120,8 +120,8 @@ cleanup_sunrpc(void)
 #ifdef RPC_DEBUG
 	rpc_unregister_sysctl();
 #endif
-	rcu_barrier(); /* Wait for completion of call_rcu()'s */
+	rcu_barrier(); 
 }
 MODULE_LICENSE("GPL");
-fs_initcall(init_sunrpc); /* Ensure we're initialised before nfs */
+fs_initcall(init_sunrpc); 
 module_exit(cleanup_sunrpc);

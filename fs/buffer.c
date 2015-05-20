@@ -699,9 +699,7 @@ link_dev_buffers(struct page *page, struct buffer_head *head)
 	attach_page_buffers(page, head);
 }
 
-/*
- * Initialise the state of a blockdev page's buffers.
- */ 
+ 
 static sector_t
 init_page_buffers(struct page *page, struct block_device *bdev,
 			sector_t block, int size)
@@ -725,17 +723,9 @@ init_page_buffers(struct page *page, struct block_device *bdev,
 		bh = bh->b_this_page;
 	} while (bh != head);
 
-	/*
-	 * Caller needs to validate requested block against end of device.
-	 */
 	return end_block;
 }
 
-/*
- * Create the page-cache page that contains the requested block.
- *
- * This is used purely for blockdev mappings.
- */
 static int
 grow_dev_page(struct block_device *bdev, sector_t block,
 		pgoff_t index, int size, int sizebits)
@@ -744,7 +734,7 @@ grow_dev_page(struct block_device *bdev, sector_t block,
 	struct page *page;
 	struct buffer_head *bh;
 	sector_t end_block;
-	int ret = 0;		/* Will call free_more_memory() */
+	int ret = 0;		
 
 	page = find_or_create_page(inode->i_mapping, index,
 		(mapping_gfp_mask(inode->i_mapping) & ~__GFP_FS)|__GFP_MOVABLE);
@@ -803,14 +793,14 @@ grow_buffers(struct block_device *bdev, sector_t block, int size)
 		return -EIO;
 	}
 
-	/* Create a page with the proper size buffers.. */
+	
 	return grow_dev_page(bdev, block, index, size, sizebits);
 }
 
 static struct buffer_head *
 __getblk_slow(struct block_device *bdev, sector_t block, int size)
 {
-	/* Size must be multiple of hard sectorsize */
+	
 	if (unlikely(size & (bdev_logical_block_size(bdev)-1) ||
 			(size < 512 || size > PAGE_SIZE))) {
 		printk(KERN_ERR "getblk(): invalid block size %d requested\n",
@@ -1011,14 +1001,6 @@ __find_get_block(struct block_device *bdev, sector_t block, unsigned size)
 }
 EXPORT_SYMBOL(__find_get_block);
 
-/*
- * __getblk will locate (and, if necessary, create) the buffer_head
- * which corresponds to the passed block_device, block and size. The
- * returned buffer has its reference count incremented.
- *
- * __getblk() will lock up the machine if grow_dev_page's try_to_free_buffers()
- * attempt is failing.  FIXME, perhaps?
- */
 struct buffer_head *
 __getblk(struct block_device *bdev, sector_t block, unsigned size)
 {

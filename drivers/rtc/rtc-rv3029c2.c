@@ -303,7 +303,7 @@ static int rv3029c2_rtc_i2c_set_alarm(struct i2c_client *client,
 			return ret;
 		}
 		/* enable AIE irq */
-		ret = rv3029c2_rtc_i2c_alarm_set_irq(client, 0);
+		ret = rv3029c2_rtc_i2c_alarm_set_irq(client, 1);
 		if (ret)
 			return ret;
 

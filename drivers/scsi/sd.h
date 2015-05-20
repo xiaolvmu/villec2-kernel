@@ -1,11 +1,6 @@
 #ifndef _SCSI_DISK_H
 #define _SCSI_DISK_H
 
-/*
- * More than enough for everybody ;)  The huge number of majors
- * is a leftover from 16bit dev_t days, we don't really need that
- * much numberspace.
- */
 #define SD_MAJORS	16
 
 #define SD_TIMEOUT		(30 * HZ)
@@ -53,11 +48,10 @@ struct scsi_disk {
 	u8		write_prot;
 	u8		protection_type;
 	u8		provisioning_mode;
-	unsigned	ATO : 1;	/* state of disk ATO bit */
-	unsigned	cache_override : 1; /* temp override of WCE,RCD */
-	unsigned	WCE : 1;	/* state of disk WCE bit */
-	unsigned	RCD : 1;	/* state of disk RCD bit, unused */
-	unsigned	DPOFUA : 1;	/* state of disk DPOFUA bit */
+	unsigned	ATO : 1;	
+	unsigned	WCE : 1;	
+	unsigned	RCD : 1;	
+	unsigned	DPOFUA : 1;	
 	unsigned	first_scan : 1;
 	unsigned	lbpme : 1;
 	unsigned	lbprz : 1;

@@ -118,16 +118,6 @@ ssize_t rpc_pipe_generic_upcall(struct file *filp, struct rpc_pipe_msg *msg,
 }
 EXPORT_SYMBOL_GPL(rpc_pipe_generic_upcall);
 
-/**
- * rpc_queue_upcall - queue an upcall message to userspace
- * @inode: inode of upcall pipe on which to queue given message
- * @msg: message to queue
- *
- * Call with an @inode created by rpc_mkpipe() to queue an upcall.
- * A userspace process may then later read the upcall by performing a
- * read on an open file for this inode.  It is up to the caller to
- * initialize the fields of @msg (other than @msg->list) appropriately.
- */
 int
 rpc_queue_upcall(struct rpc_pipe *pipe, struct rpc_pipe_msg *msg)
 {
@@ -311,7 +301,7 @@ rpc_pipe_read(struct file *filp, char __user *buf, size_t len, loff_t *offset)
 		if (msg == NULL)
 			goto out_unlock;
 	}
-	/* NOTE: it is up to the callback to update msg->copied */
+	
 	res = pipe->ops->upcall(filp, msg, buf, len);
 	if (res < 0 || msg->len == msg->copied) {
 		filp->private_data = NULL;
@@ -459,9 +449,6 @@ static const struct file_operations rpc_info_operations = {
 };
 
 
-/*
- * Description of fs contents.
- */
 struct rpc_filelist {
 	const char *name;
 	const struct file_operations *i_fop;
@@ -671,9 +658,6 @@ static struct dentry *__rpc_lookup_create_exclusive(struct dentry *parent,
 	return ERR_PTR(-EEXIST);
 }
 
-/*
- * FIXME: This probably has races.
- */
 static void __rpc_depopulate(struct dentry *parent,
 			     const struct rpc_filelist *files,
 			     int start, int eof)
@@ -814,26 +798,6 @@ static int rpc_rmdir_depopulate(struct dentry *dentry,
 	return error;
 }
 
-/**
- * rpc_mkpipe - make an rpc_pipefs file for kernel<->userspace communication
- * @parent: dentry of directory to create new "pipe" in
- * @name: name of pipe
- * @private: private data to associate with the pipe, for the caller's use
- * @ops: operations defining the behavior of the pipe: upcall, downcall,
- *	release_pipe, open_pipe, and destroy_msg.
- * @flags: rpc_pipe flags
- *
- * Data is made available for userspace to read by calls to
- * rpc_queue_upcall().  The actual reads will result in calls to
- * @ops->upcall, which will be called with the file pointer,
- * message, and userspace buffer to copy to.
- *
- * Writes can come at any time, and do not necessarily have to be
- * responses to upcalls.  They will result in calls to @msg->downcall.
- *
- * The @private argument passed here will be available to all these methods
- * from the file pointer, via RPC_I(file->f_dentry->d_inode)->private.
- */
 struct dentry *rpc_mkpipe_dentry(struct dentry *parent, const char *name,
 				 void *private, struct rpc_pipe *pipe)
 {
@@ -872,14 +836,6 @@ out_err:
 }
 EXPORT_SYMBOL_GPL(rpc_mkpipe_dentry);
 
-/**
- * rpc_unlink - remove a pipe
- * @dentry: dentry for the pipe, as returned from rpc_mkpipe
- *
- * After this call, lookups will no longer find the pipe, and any
- * attempts to read or write using preexisting opens of the pipe will
- * return -EPIPE.
- */
 int
 rpc_unlink(struct dentry *dentry)
 {
@@ -922,17 +878,6 @@ static void rpc_clntdir_depopulate(struct dentry *dentry)
 	rpc_depopulate(dentry, authfiles, RPCAUTH_info, RPCAUTH_EOF);
 }
 
-/**
- * rpc_create_client_dir - Create a new rpc_client directory in rpc_pipefs
- * @dentry: dentry from the rpc_pipefs root to the new directory
- * @name: &struct qstr for the name
- * @rpc_client: rpc client to associate with this directory
- *
- * This creates a directory at the given @path associated with
- * @rpc_clnt, which will contain a file named "info" with some basic
- * information about the client, together with any "pipes" that may
- * later be created using rpc_mkpipe().
- */
 struct dentry *rpc_create_client_dir(struct dentry *dentry,
 				   struct qstr *name,
 				   struct rpc_clnt *rpc_client)
@@ -941,10 +886,6 @@ struct dentry *rpc_create_client_dir(struct dentry *dentry,
 			rpc_clntdir_populate, rpc_client);
 }
 
-/**
- * rpc_remove_client_dir - Remove a directory created with rpc_create_client_dir()
- * @clnt: rpc client
- */
 int rpc_remove_client_dir(struct dentry *dentry)
 {
 	return rpc_rmdir_depopulate(dentry, rpc_clntdir_depopulate);
@@ -992,9 +933,6 @@ void rpc_remove_cache_dir(struct dentry *dentry)
 	rpc_rmdir_depopulate(dentry, rpc_cachedir_depopulate);
 }
 
-/*
- * populate the filesystem
- */
 static const struct super_operations s_ops = {
 	.alloc_inode	= rpc_alloc_inode,
 	.destroy_inode	= rpc_destroy_inode,
@@ -1003,9 +941,6 @@ static const struct super_operations s_ops = {
 
 #define RPCAUTH_GSSMAGIC 0x67596969
 
-/*
- * We have a single directory with 1 node in it.
- */
 enum {
 	RPCAUTH_lockd,
 	RPCAUTH_mount,
@@ -1053,9 +988,6 @@ static const struct rpc_filelist files[] = {
 	},
 };
 
-/*
- * This call can be used only in RPC pipefs mount notification hooks.
- */
 struct dentry *rpc_d_lookup_sb(const struct super_block *sb,
 			       const unsigned char *dir_name)
 {
@@ -1076,12 +1008,6 @@ void rpc_pipefs_init_net(struct net *net)
 	mutex_init(&sn->pipefs_sb_lock);
 }
 
-/*
- * This call will be used for per network namespace operations calls.
- * Note: Function will be returned with pipefs_sb_lock taken if superblock was
- * found. This lock have to be released by rpc_put_sb_net() when all operations
- * will be completed.
- */
 struct super_block *rpc_get_sb_net(const struct net *net)
 {
 	struct sunrpc_net *sn = net_generic(net, sunrpc_net_id);
@@ -1157,19 +1083,14 @@ static void rpc_kill_sb(struct super_block *sb)
 	struct sunrpc_net *sn = net_generic(net, sunrpc_net_id);
 
 	mutex_lock(&sn->pipefs_sb_lock);
-	if (sn->pipefs_sb != sb) {
-		mutex_unlock(&sn->pipefs_sb_lock);
-		goto out;
-	}
 	sn->pipefs_sb = NULL;
 	mutex_unlock(&sn->pipefs_sb_lock);
+	put_net(net);
 	dprintk("RPC:	sending pipefs UMOUNT notification for net %p%s\n", net,
 								NET_NAME(net));
 	blocking_notifier_call_chain(&rpc_pipefs_notifier_list,
 					   RPC_PIPEFS_UMOUNT,
 					   sb);
-	put_net(net);
-out:
 	kill_litter_super(sb);
 }
 
@@ -1224,5 +1145,4 @@ void unregister_rpc_pipefs(void)
 	unregister_filesystem(&rpc_pipe_fs_type);
 }
 
-/* Make 'mount -t rpc_pipefs ...' autoload this module. */
 MODULE_ALIAS("rpc_pipefs");

@@ -3,7 +3,7 @@
  * Virtual Ethernet Interface for MSM7K Networking
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -39,7 +39,6 @@
 #include <mach/msm_smd.h>
 #include <mach/peripheral-loader.h>
 
-/* Debug message support */
 static int msm_rmnet_debug_mask;
 module_param_named(debug_enable, msm_rmnet_debug_mask,
 			int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -56,7 +55,6 @@ module_param_named(debug_enable, msm_rmnet_debug_mask,
 #define DBG1(x...) DBG(DEBUG_MASK_LVL1, x)
 #define DBG2(x...) DBG(DEBUG_MASK_LVL2, x)
 
-/* Configure device instances */
 #define RMNET_DEVICE_COUNT (8)
 static const char *ch_name[RMNET_DEVICE_COUNT] = {
 	"DATA5",
@@ -69,10 +67,8 @@ static const char *ch_name[RMNET_DEVICE_COUNT] = {
 	"DATA14",
 };
 
-/* XXX should come from smd headers */
 #define SMD_PORT_ETHER0 11
 
-/* allow larger frames */
 #define RMNET_DATA_LEN 2000
 
 #define HEADROOM_FOR_QOS    8
@@ -94,7 +90,7 @@ struct rmnet_private
 	struct sk_buff *skb;
 	spinlock_t lock;
 	struct tasklet_struct tsklt;
-	u32 operation_mode;    /* IOCTL specified mode (protocol, QoS header) */
+	u32 operation_mode;    
 	struct platform_driver pdrv;
 	struct completion complete;
 	void *pil;
@@ -105,7 +101,6 @@ static uint msm_rmnet_modem_wait;
 module_param_named(modem_wait, msm_rmnet_modem_wait,
 		   uint, S_IRUGO | S_IWUSR | S_IWGRP);
 
-/* Forward declaration */
 static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd);
 
 static int count_this_packet(void *_hdr, int len)
@@ -122,14 +117,9 @@ static int count_this_packet(void *_hdr, int len)
 static unsigned long timeout_us;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-/*
- * If early suspend is enabled then we specify two timeout values,
- * screen on (default), and screen is off.
- */
 static unsigned long timeout_suspend_us;
 static struct device *rmnet0;
 
-/* Set timeout in us when the screen is off. */
 static ssize_t timeout_suspend_store(struct device *d, struct device_attribute *attr, const char *buf, size_t n)
 {
 	timeout_suspend_us = simple_strtoul(buf, NULL, 10);
@@ -173,14 +163,13 @@ static int __init rmnet_late_init(void)
 late_initcall(rmnet_late_init);
 #endif
 
-/* Returns 1 if packet caused rmnet to wakeup, 0 otherwise. */
 static int rmnet_cause_wakeup(struct rmnet_private *p) {
 	int ret = 0;
 	ktime_t now;
-	if (p->timeout_us == 0) /* Check if disabled */
+	if (p->timeout_us == 0) 
 		return 0;
 
-	/* Use real (wall) time. */
+	
 	now = ktime_get_real();
 
 	if (ktime_us_delta(now, p->last_packet) > p->timeout_us) {
@@ -209,7 +198,6 @@ static ssize_t wakeups_rcv_show(struct device *d, struct device_attribute *attr,
 
 DEVICE_ATTR(wakeups_rcv, 0444, wakeups_rcv_show, NULL);
 
-/* Set timeout in us. */
 static ssize_t timeout_store(struct device *d, struct device_attribute *attr,
 		const char *buf, size_t n)
 {
@@ -217,7 +205,6 @@ static ssize_t timeout_store(struct device *d, struct device_attribute *attr,
 	struct rmnet_private *p = netdev_priv(to_net_dev(d));
 	p->timeout_us = timeout_us = simple_strtoul(buf, NULL, 10);
 #else
-/* If using early suspend/resume hooks do not write the value on store. */
 	timeout_us = simple_strtoul(buf, NULL, 10);
 #endif
 	return n;
@@ -240,7 +227,7 @@ static __be16 rmnet_ip_type_trans(struct sk_buff *skb, struct net_device *dev)
 
 	skb->dev = dev;
 
-	/* Determine L3 protocol */
+	
 	switch (skb->data[0] & 0xf0) {
 	case 0x40:
 		protocol = htons(ETH_P_IP);
@@ -251,7 +238,7 @@ static __be16 rmnet_ip_type_trans(struct sk_buff *skb, struct net_device *dev)
 	default:
 		pr_err("[%s] rmnet_recv() L3 protocol decode error: 0x%02x",
 		       dev->name, skb->data[0] & 0xf0);
-		/* skb will be dropped in uppder layer for unknown protocol */
+		
 	}
 	return protocol;
 }
@@ -259,7 +246,6 @@ static __be16 rmnet_ip_type_trans(struct sk_buff *skb, struct net_device *dev)
 static void smd_net_data_handler(unsigned long arg);
 static DECLARE_TASKLET(smd_net_data_tasklet, smd_net_data_handler, 0);
 
-/* Called in soft-irq context */
 static void smd_net_data_handler(unsigned long arg)
 {
 	struct net_device *dev = (struct net_device *) arg;
@@ -279,7 +265,7 @@ static void smd_net_data_handler(unsigned long arg)
 		if (skb == NULL) {
 			pr_err("[%s] rmnet_recv() cannot allocate skb\n",
 			       dev->name);
-			/* out of memory, reschedule a later attempt */
+			
 			smd_net_data_tasklet.data = (unsigned long)dev;
 			tasklet_schedule(&smd_net_data_tasklet);
 			break;
@@ -294,17 +280,17 @@ static void smd_net_data_handler(unsigned long arg)
 				ptr = 0;
 				dev_kfree_skb_irq(skb);
 			} else {
-				/* Handle Rx frame format */
+				
 				spin_lock_irqsave(&p->lock, flags);
 				opmode = p->operation_mode;
 				spin_unlock_irqrestore(&p->lock, flags);
 
 				if (RMNET_IS_MODE_IP(opmode)) {
-					/* Driver in IP mode */
+					
 					skb->protocol =
 					  rmnet_ip_type_trans(skb, dev);
 				} else {
-					/* Driver in Ethernet mode */
+					
 					skb->protocol =
 					  eth_type_trans(skb, dev);
 				}
@@ -321,7 +307,7 @@ static void smd_net_data_handler(unsigned long arg)
 					dev->name, p->stats.rx_packets,
 					skb->len);
 
-				/* Deliver to network stack */
+				
 				netif_rx(skb);
 			}
 			continue;
@@ -341,7 +327,7 @@ static int _rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	u32 opmode;
 	unsigned long flags;
 
-	/* For QoS mode, prepend QMI header and assign flow ID from skb->mark */
+	
 	spin_lock_irqsave(&p->lock, flags);
 	opmode = p->operation_mode;
 	spin_unlock_irqrestore(&p->lock, flags);
@@ -375,7 +361,7 @@ static int _rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	    dev->name, p->stats.tx_packets, skb->len, skb->mark);
 
 xmit_out:
-	/* data xmited, safe to release skb */
+	
 	dev_kfree_skb_irq(skb);
 	return 0;
 }
@@ -387,8 +373,6 @@ static void _rmnet_resume_flow(unsigned long param)
 	struct sk_buff *skb = NULL;
 	unsigned long flags;
 
-	/* xmit and enable the flow only once even if
-	   multiple tasklets were scheduled by smd_net_notify */
 	spin_lock_irqsave(&p->lock, flags);
 	if (p->skb && (smd_write_avail(p->ch) >= p->skb->len)) {
 		skb = p->skb;
@@ -536,14 +520,6 @@ static int rmnet_stop(struct net_device *dev)
 	netif_stop_queue(dev);
 	tasklet_kill(&p->tsklt);
 
-	/* TODO: unload modem safely,
-	   currently, this causes unnecessary unloads */
-	/*
-	mutex_lock(&p->pil_lock);
-	msm_rmnet_unload_modem(p->pil);
-	p->pil = NULL;
-	mutex_unlock(&p->pil_lock);
-	*/
 
 	return 0;
 }
@@ -638,10 +614,10 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 	int prev_mtu = dev->mtu;
 	int rc = 0;
 
-	/* Process IOCTL command */
+	
 	switch (cmd) {
-	case RMNET_IOCTL_SET_LLP_ETHERNET:  /* Set Ethernet protocol   */
-		/* Perform Ethernet config only if in IP mode currently*/
+	case RMNET_IOCTL_SET_LLP_ETHERNET:  
+		
 		if (p->operation_mode & RMNET_MODE_LLP_IP) {
 			ether_setup(dev);
 			random_ether_addr(dev->dev_addr);
@@ -658,12 +634,12 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 		}
 		break;
 
-	case RMNET_IOCTL_SET_LLP_IP:        /* Set RAWIP protocol      */
-		/* Perform IP config only if in Ethernet mode currently*/
+	case RMNET_IOCTL_SET_LLP_IP:        
+		
 		if (p->operation_mode & RMNET_MODE_LLP_ETH) {
 
-			/* Undo config done in ether_setup() */
-			dev->header_ops         = 0;  /* No header */
+			
+			dev->header_ops         = 0;  
 			dev->type               = ARPHRD_RAWIP;
 			dev->hard_header_len    = 0;
 			dev->mtu                = prev_mtu;
@@ -681,13 +657,13 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 		}
 		break;
 
-	case RMNET_IOCTL_GET_LLP:           /* Get link protocol state */
+	case RMNET_IOCTL_GET_LLP:           
 		ifr->ifr_ifru.ifru_data =
 			(void *)(p->operation_mode &
 				(RMNET_MODE_LLP_ETH|RMNET_MODE_LLP_IP));
 		break;
 
-	case RMNET_IOCTL_SET_QOS_ENABLE:    /* Set QoS header enabled  */
+	case RMNET_IOCTL_SET_QOS_ENABLE:    
 		spin_lock_irqsave(&p->lock, flags);
 		p->operation_mode |= RMNET_MODE_QOS;
 		spin_unlock_irqrestore(&p->lock, flags);
@@ -695,7 +671,7 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 			dev->name);
 		break;
 
-	case RMNET_IOCTL_SET_QOS_DISABLE:   /* Set QoS header disabled */
+	case RMNET_IOCTL_SET_QOS_DISABLE:   
 		spin_lock_irqsave(&p->lock, flags);
 		p->operation_mode &= ~RMNET_MODE_QOS;
 		spin_unlock_irqrestore(&p->lock, flags);
@@ -703,22 +679,22 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 			dev->name);
 		break;
 
-	case RMNET_IOCTL_GET_QOS:           /* Get QoS header state    */
+	case RMNET_IOCTL_GET_QOS:           
 		ifr->ifr_ifru.ifru_data =
 			(void *)(p->operation_mode & RMNET_MODE_QOS);
 		break;
 
-	case RMNET_IOCTL_GET_OPMODE:        /* Get operation mode      */
+	case RMNET_IOCTL_GET_OPMODE:        
 		ifr->ifr_ifru.ifru_data = (void *)p->operation_mode;
 		break;
 
-	case RMNET_IOCTL_OPEN:              /* Open transport port     */
+	case RMNET_IOCTL_OPEN:              
 		rc = __rmnet_open(dev);
 		DBG0("[%s] rmnet_ioctl(): open transport port\n",
 			dev->name);
 		break;
 
-	case RMNET_IOCTL_CLOSE:             /* Close transport port    */
+	case RMNET_IOCTL_CLOSE:             
 		rc = __rmnet_close(dev);
 		DBG0("[%s] rmnet_ioctl(): close transport port\n",
 			dev->name);
@@ -738,17 +714,17 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 
 static void __init rmnet_setup(struct net_device *dev)
 {
-	/* Using Ethernet mode by default */
+	
 	dev->netdev_ops = &rmnet_ops_ether;
 	ether_setup(dev);
 
-	/* set this after calling ether_setup */
+	
 	dev->mtu = RMNET_DATA_LEN;
 	dev->needed_headroom = HEADROOM_FOR_QOS;
 
 	random_ether_addr(dev->dev_addr);
 
-	dev->watchdog_timeo = 1000; /* 10 seconds? */
+	dev->watchdog_timeo = 1000; 
 }
 
 static int msm_rmnet_smd_probe(struct platform_device *pdev)
@@ -791,7 +767,7 @@ static int __init rmnet_init(void)
 		d = &(dev->dev);
 		p = netdev_priv(dev);
 		p->chname = ch_name[n];
-		/* Initial config uses Ethernet */
+		
 		p->operation_mode = RMNET_MODE_LLP_ETH;
 		p->skb = NULL;
 		spin_lock_init(&p->lock);
@@ -834,7 +810,7 @@ static int __init rmnet_init(void)
 		if (device_create_file(d, &dev_attr_timeout_suspend))
 			continue;
 
-		/* Only care about rmnet0 for suspend/resume tiemout hooks. */
+		
 		if (n == 0)
 			rmnet0 = d;
 #endif

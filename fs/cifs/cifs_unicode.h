@@ -256,17 +256,17 @@ UniToupper(register wchar_t uc)
 	return uc;		
 }
 
-static inline __le16 *
-UniStrupr(register __le16 *upin)
+static inline wchar_t *
+UniStrupr(register wchar_t *upin)
 {
-	register __le16 *up;
+	register wchar_t *up;
 
 	up = upin;
 	while (*up) {		
-		*up = cpu_to_le16(UniToupper(le16_to_cpu(*up)));
+		*up = UniToupper(*up);
 		up++;
 	}
-	return upin;		/* Return input pointer */
+	return upin;		
 }
 #endif				
 

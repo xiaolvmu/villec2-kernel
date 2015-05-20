@@ -155,8 +155,8 @@ static u32 cubic_root(u64 a)
 
 static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
 {
-	u32 delta, bic_target, max_cnt;
-	u64 offs, t;
+	u64 offs;
+	u32 delta, t, bic_target, max_cnt;
 
 	ca->ack_cnt++;	
 
@@ -185,10 +185,8 @@ static inline void bictcp_update(struct bictcp *ca, u32 cwnd)
 	
 
 	
-	t = (s32)(tcp_time_stamp - ca->epoch_start);
-	t += msecs_to_jiffies(ca->delay_min >> 3);
-	t <<= BICTCP_HZ;
-	do_div(t, HZ);
+	t = ((tcp_time_stamp + msecs_to_jiffies(ca->delay_min>>3)
+	      - ca->epoch_start) << BICTCP_HZ) / HZ;
 
 	if (t < ca->bic_K)		
 		offs = ca->bic_K - t;
@@ -339,7 +337,7 @@ static void bictcp_acked(struct sock *sk, u32 cnt, s32 rtt_us)
 		return;
 
 	
-	if (ca->epoch_start && (s32)(tcp_time_stamp - ca->epoch_start) < HZ)
+	if ((s32)(tcp_time_stamp - ca->epoch_start) < HZ)
 		return;
 
 	delay = (rtt_us << 3) / USEC_PER_MSEC;

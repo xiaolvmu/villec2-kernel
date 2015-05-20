@@ -15,10 +15,6 @@ struct virtqueue {
 	void *priv;
 };
 
-unsigned virtqueue_enable_cb_prepare(struct virtqueue *vq);
-
-bool virtqueue_poll(struct virtqueue *vq, unsigned);
-
 int virtqueue_add_buf(struct virtqueue *vq,
 		      struct scatterlist sg[],
 		      unsigned int out_num,

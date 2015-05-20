@@ -64,8 +64,7 @@ nlmsvc_retrieve_args(struct svc_rqst *rqstp, struct nlm_args *argp,
 
 	
 	if (filp != NULL) {
-		error = cast_status(nlm_lookup_file(rqstp, &file, &lock->fh));
-		if (error != 0)
+		if ((error = nlm_lookup_file(rqstp, &file, &lock->fh)) != 0)
 			goto no_locks;
 		*filp = file;
 

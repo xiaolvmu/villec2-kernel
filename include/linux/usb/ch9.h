@@ -89,41 +89,19 @@
 #define USB_INTRF_FUNC_SUSPEND_LP	(1 << (8 + 0))
 #define USB_INTRF_FUNC_SUSPEND_RW	(1 << (8 + 1))
 
-/*
- * Interface status, Figure 9-5 USB 3.0 spec
- */
-#define USB_INTRF_STAT_FUNC_RW_CAP     1
-#define USB_INTRF_STAT_FUNC_RW         2
+#define USB_ENDPOINT_HALT		0	
 
-#define USB_ENDPOINT_HALT		0	/* IN/OUT will STALL */
 #define OTG_STATUS_SELECTOR		0xF000
 #define HOST_REQUEST_FLAG		0
 #define THOST_REQ_POLL			1500    
 #define OTG_TTST_SUSP			70	
+
 #define OTG_TTST_VBUS_OFF               1
 
-/* Bit array elements as returned by the USB_REQ_GET_STATUS request. */
-#define USB_DEV_STAT_U1_ENABLED		2	/* transition into U1 state */
-#define USB_DEV_STAT_U2_ENABLED		3	/* transition into U2 state */
-#define USB_DEV_STAT_LTM_ENABLED	4	/* Latency tolerance messages */
+#define USB_DEV_STAT_U1_ENABLED		2	
+#define USB_DEV_STAT_U2_ENABLED		3	
+#define USB_DEV_STAT_LTM_ENABLED	4	
 
-/**
- * struct usb_ctrlrequest - SETUP data for a USB device control request
- * @bRequestType: matches the USB bmRequestType field
- * @bRequest: matches the USB bRequest field
- * @wValue: matches the USB wValue field (le16 byte order)
- * @wIndex: matches the USB wIndex field (le16 byte order)
- * @wLength: matches the USB wLength field (le16 byte order)
- *
- * This structure is used to send control requests to a USB device.  It matches
- * the different fields of the USB 2.0 Spec section 9.3, table 9-2.  See the
- * USB spec for a fuller description of the different fields, and what they are
- * used for.
- *
- * Note that the driver for any interface can issue control requests.
- * For most devices, interfaces don't coordinate with each other, so
- * such requests may be made at any time.
- */
 struct usb_ctrlrequest {
 	__u8 bRequestType;
 	__u8 bRequest;

@@ -68,7 +68,6 @@
 #include <linux/shmem_fs.h>
 #include <linux/slab.h>
 #include <linux/perf_event.h>
-#include <linux/random.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -489,7 +488,7 @@ asmlinkage void __init start_kernel(void)
 	pidmap_init();
 	anon_vma_init();
 #ifdef CONFIG_X86
-	if (efi_enabled(EFI_RUNTIME_SERVICES))
+	if (efi_enabled)
 		efi_enter_virtual_mode();
 #endif
 	thread_info_cache_init();
@@ -516,9 +515,6 @@ asmlinkage void __init start_kernel(void)
 
 	acpi_early_init(); 
 	sfi_init_late();
-
-	if (efi_enabled(EFI_RUNTIME_SERVICES))
-		efi_free_boot_services();
 
 	ftrace_init();
 
@@ -658,7 +654,6 @@ static void __init do_basic_setup(void)
 	do_ctors();
 	usermodehelper_enable();
 	do_initcalls();
-	random_int_secret_init();
 }
 
 static void __init do_pre_smp_initcalls(void)
