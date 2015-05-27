@@ -1084,8 +1084,6 @@ int mdp4_dsi_cmd_off(struct platform_device *pdev)
 	complete_all(&vctrl->vsync_comp);
 	vctrl->wait_vsync_cnt = 0;
 
-}
-
 	if (pipe) {
 		/* sanity check, free pipes besides base layer */
 		mixer = pipe->mixer_num;
@@ -1097,7 +1095,7 @@ int mdp4_dsi_cmd_off(struct platform_device *pdev)
 			/* base pipe may change after borderfill_stage_down */
 			pipe = vctrl->base_pipe;
 			mdp4_mixer_stage_down(pipe, 1);
-			mdp4_overlay_pipe_free(pipe);
+			mdp4_overlay_pipe_free(pipe, 1);
 			vctrl->base_pipe = NULL;
 		} else {
 			mdp4_mixer_stage_down(pipe, 1);
@@ -1105,7 +1103,6 @@ int mdp4_dsi_cmd_off(struct platform_device *pdev)
 		}
 	}
 
-	atomic_set(&vctrl->suspend, 1);
 
 	/*
 	 * clean up ion freelist
@@ -1116,9 +1113,6 @@ int mdp4_dsi_cmd_off(struct platform_device *pdev)
 	mdp4_overlay_iommu_unmap_freelist(mixer);
 
 	mutex_unlock(&mfd->dma->ov_mutex);
-
-	pr_debug("%s-:\n", __func__);
-	return ret;
 
 }
 
