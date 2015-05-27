@@ -611,12 +611,22 @@ int mdp4_lcdc_off(struct platform_device *pdev)
 	struct msm_fb_data_type *mfd;
 	struct vsycn_ctrl *vctrl;
 	struct mdp4_overlay_pipe *pipe;
+	int mixer = 0;
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
 	vctrl = &vsync_ctrl_db[cndx];
 	pipe = vctrl->base_pipe;
 
 	atomic_set(&vctrl->suspend, 1);
+
+	/*
+	 * clean up ion freelist
+	 * there need two stage to empty ion free list
+	 * therefore need call unmap freelist twice
+	 */
+	mdp4_overlay_iommu_unmap_freelist(mixer);
+	mdp4_overlay_iommu_unmap_freelist(mixer);
+
 
 	if (vctrl->expire_tick)
 		msleep(20 * vctrl->expire_tick);
@@ -629,8 +639,8 @@ int mdp4_lcdc_off(struct platform_device *pdev)
 
 
 	if (pipe) {
-		
-		mdp4_overlay_unset_mixer(pipe->mixer_num);
+		mixer = pipe->mixer_num;
+		mdp4_overlay_unset_mixer(mixer);
 		if (mfd->ref_cnt == 0) {
 			
 			if (pipe->pipe_type == OVERLAY_TYPE_BF)
