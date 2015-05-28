@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2012,2014 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,8 +28,7 @@
 
 #define Z180_DEFAULT_PWRSCALE_POLICY  NULL
 
-/* Wait a maximum of 20 seconds when trying to idle the core */
-#define Z180_IDLE_TIMEOUT (20 * 1000)
+#define Z180_IDLE_TIMEOUT (10 * 1000)
 
 struct z180_ringbuffer {
 	unsigned int prevctx;
@@ -37,7 +36,7 @@ struct z180_ringbuffer {
 };
 
 struct z180_device {
-	struct kgsl_device dev;    /* Must be first field in this struct */
+	struct kgsl_device dev;    
 	int current_timestamp;
 	int timestamp;
 	struct z180_ringbuffer ringbuffer;
@@ -46,4 +45,4 @@ struct z180_device {
 
 int z180_dump(struct kgsl_device *, int);
 
-#endif /* __Z180_H */
+#endif 

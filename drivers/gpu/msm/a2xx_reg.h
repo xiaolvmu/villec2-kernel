@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012,2014 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -183,7 +183,6 @@ union reg_cp_rb_cntl {
 #define SQ_INT_CNTL__VS_WATCHDOG_MASK                      0x00000002L
 
 #define RBBM_INT_CNTL__RDERR_INT_MASK                      0x00000001L
-#define RBBM_INT_CNTL__PROTECT_INT_MASK                    0x00100000L
 #define RBBM_INT_CNTL__DISPLAY_UPDATE_INT_MASK             0x00000002L
 #define RBBM_INT_CNTL__GUI_IDLE_INT_MASK                   0x00080000L
 
@@ -292,10 +291,6 @@ union reg_cp_rb_cntl {
 #define REG_RBBM_PERFCOUNTER1_HI         0x0398
 #define REG_RBBM_PERFCOUNTER1_LO         0x0397
 
-#define REG_SQ_PERFCOUNTER3_SELECT       0x0DCB
-#define REG_SQ_PERFCOUNTER3_LO           0x0DD2
-#define REG_SQ_PERFCOUNTER3_HI           0x0DD3
-
 #define REG_MASTER_INT_SIGNAL            0x03B7
 
 #define REG_PA_CL_VPORT_XSCALE           0x210F
@@ -336,24 +331,6 @@ union reg_cp_rb_cntl {
 #define REG_RBBM_READ_ERROR              0x03B3
 #define REG_RBBM_SOFT_RESET              0x003C
 #define REG_RBBM_STATUS                  0x05D0
-
-/*A2XX Protection */
-#define REG_RBBM_PROTECT_0	         0x0140
-#define REG_RBBM_PROTECT_1	         0x0141
-#define REG_RBBM_PROTECT_2	         0x0142
-#define REG_RBBM_PROTECT_3	         0x0143
-#define REG_RBBM_PROTECT_4	         0x0144
-#define REG_RBBM_PROTECT_5	         0x0145
-#define REG_RBBM_PROTECT_6	         0x0146
-#define REG_RBBM_PROTECT_7	         0x0147
-#define REG_RBBM_PROTECT_8	         0x0148
-#define REG_RBBM_PROTECT_9	         0x0149
-#define REG_RBBM_PROTECT_A	         0x014A
-#define REG_RBBM_PROTECT_B	         0x014B
-#define REG_RBBM_PROTECT_C	         0x014C
-#define REG_RBBM_PROTECT_D	         0x014D
-#define REG_RBBM_PROTECT_E	         0x014E
-#define REG_RBBM_PROTECT_F	         0x014F
 
 #define REG_RB_COLORCONTROL              0x2202
 #define REG_RB_COLOR_DEST_MASK           0x2326
@@ -409,7 +386,6 @@ union reg_cp_rb_cntl {
 #define REG_COHER_STATUS_PM4             0xA2B
 #define REG_COHER_SIZE_PM4               0xA29
 
-/*registers added in adreno220*/
 #define REG_A220_PC_INDX_OFFSET          REG_VGT_INDX_OFFSET
 #define REG_A220_PC_VERTEX_REUSE_BLOCK_CNTL REG_VGT_VERTEX_REUSE_BLOCK_CNTL
 #define REG_A220_PC_MAX_VTX_INDX         REG_VGT_MAX_VTX_INDX
@@ -418,15 +394,12 @@ union reg_cp_rb_cntl {
 #define REG_A220_VSC_BIN_SIZE            0x0C01
 #define REG_A220_VSC_PIPE_DATA_LENGTH_7  0x0C1D
 
-/*registers added in adreno225*/
 #define REG_A225_RB_COLOR_INFO3          0x2005
 #define REG_A225_PC_MULTI_PRIM_IB_RESET_INDX 0x2103
 #define REG_A225_GRAS_UCP0X              0x2340
 #define REG_A225_GRAS_UCP5W              0x2357
 #define REG_A225_GRAS_UCP_ENABLED        0x2360
-#define REG_VSC_BINNING_ENABLE           0x0C00
 
-/* Debug registers used by snapshot */
 #define REG_PA_SU_DEBUG_CNTL            0x0C80
 #define REG_PA_SU_DEBUG_DATA            0x0C81
 #define REG_RB_DEBUG_CNTL               0x0F26
@@ -459,4 +432,4 @@ union reg_cp_rb_cntl {
 #define REG_SQ_DEBUG_MISC_0             0x2309
 #define REG_SQ_DEBUG_MISC_1             0x230A
 
-#endif /* __A200_REG_H */
+#endif 
