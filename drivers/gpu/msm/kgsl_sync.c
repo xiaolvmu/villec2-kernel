@@ -12,8 +12,11 @@
  */
 
 #include <linux/file.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+
+#include <asm/current.h>
 
 #include "kgsl_sync.h"
 
@@ -29,6 +32,10 @@ struct sync_pt *kgsl_sync_pt_create(struct sync_timeline *timeline,
 	return pt;
 }
 
+/*
+ * This should only be called on sync_pts which have been created but
+ * not added to a fence.
+ */
 void kgsl_sync_pt_destroy(struct sync_pt *pt)
 {
 	sync_pt_free(pt);
@@ -48,7 +55,7 @@ static int kgsl_sync_pt_has_signaled(struct sync_pt *pt)
 	unsigned int ts = kpt->timestamp;
 	unsigned int last_ts = ktimeline->last_timestamp;
 	if (timestamp_cmp(last_ts, ts) >= 0) {
-		
+		/* signaled */
 		return 1;
 	}
 	return 0;
@@ -63,35 +70,44 @@ static int kgsl_sync_pt_compare(struct sync_pt *a, struct sync_pt *b)
 	return timestamp_cmp(ts_a, ts_b);
 }
 
-void kgsl_sync_timeline_value_str(struct sync_timeline *timeline, char *str,
-				   int size)
-{
-	struct kgsl_sync_timeline *ktimeline =
-		 (struct kgsl_sync_timeline *) timeline;
-	snprintf(str, size, "%d", ktimeline->last_timestamp);
-}
-
-void kgsl_sync_pt_value_str(struct sync_pt *pt, char *str, int size)
-{
-	struct kgsl_sync_pt *kpt = (struct kgsl_sync_pt *) pt;
-	snprintf(str, size, "%d", kpt->timestamp);
-}
-
 struct kgsl_fence_event_priv {
 	struct kgsl_context *context;
 	unsigned int timestamp;
 };
 
+/**
+ * kgsl_fence_event_cb - Event callback for a fence timestamp event
+ * @device - The KGSL device that expired the timestamp
+ * @priv - private data for the event
+ * @context_id - the context id that goes with the timestamp
+ * @timestamp - the timestamp that triggered the event
+ *
+ * Signal a fence following the expiration of a timestamp
+ */
 
 static inline void kgsl_fence_event_cb(struct kgsl_device *device,
-	void *priv, u32 context_id, u32 timestamp)
+	void *priv, u32 context_id, u32 timestamp, u32 type)
 {
 	struct kgsl_fence_event_priv *ev = priv;
+
+	/* Signal event time timeline for every event type */
 	kgsl_sync_timeline_signal(ev->context->timeline, ev->timestamp);
 	kgsl_context_put(ev->context);
 	kfree(ev);
 }
 
+/**
+ * kgsl_add_fence_event - Create a new fence event
+ * @device - KGSL device to create the event on
+ * @timestamp - Timestamp to trigger the event
+ * @data - Return fence fd stored in struct kgsl_timestamp_event_fence
+ * @len - length of the fence event
+ * @owner - driver instance that owns this event
+ * @returns 0 on success or error code on error
+ *
+ * Create a fence and register an event to signal the fence when
+ * the timestamp expires
+ */
 
 int kgsl_add_fence_event(struct kgsl_device *device,
 	u32 context_id, u32 timestamp, void __user *data, int len,
@@ -107,16 +123,19 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 	if (len != sizeof(priv))
 		return -EINVAL;
 
-	context = kgsl_find_context(owner, context_id);
-	if (context == NULL)
-		return -EINVAL;
-
 	event = kzalloc(sizeof(*event), GFP_KERNEL);
 	if (event == NULL)
 		return -ENOMEM;
+
+	context = kgsl_context_get_owner(owner, context_id);
+
+	if (context == NULL) {
+		kfree(event);
+		return -EINVAL;
+	}
+
 	event->context = context;
 	event->timestamp = timestamp;
-	kgsl_context_get(context);
 
 	pt = kgsl_sync_pt_create(context->timeline, timestamp);
 	if (pt == NULL) {
@@ -127,7 +146,7 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 
 	fence = sync_fence_create("kgsl-fence", pt);
 	if (fence == NULL) {
-		
+		/* only destroy pt when not added to fence */
 		kgsl_sync_pt_destroy(pt);
 		KGSL_DRV_ERR(device, "sync_fence_create failed\n");
 		ret = -ENOMEM;
@@ -147,6 +166,10 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 		goto fail_copy_fd;
 	}
 
+	/*
+	 * Hold the context ref-count for the event - it will get released in
+	 * the callback
+	 */
 	ret = kgsl_add_event(device, context_id, timestamp,
 			kgsl_fence_event_cb, event, owner);
 	if (ret)
@@ -156,11 +179,10 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 
 fail_event:
 fail_copy_fd:
-	
-	sync_fence_put(fence);
+	/* clean up sync_fence_install */
 	put_unused_fd(priv.fence_fd);
 fail_fd:
-	
+	/* clean up sync_fence_create */
 	sync_fence_put(fence);
 fail_fence:
 fail_pt:
@@ -169,25 +191,81 @@ fail_pt:
 	return ret;
 }
 
+static unsigned int kgsl_sync_get_timestamp(
+	struct kgsl_sync_timeline *ktimeline, enum kgsl_timestamp_type type)
+{
+	unsigned int ret = 0;
+
+	struct kgsl_context *context = kgsl_context_get(ktimeline->device,
+			ktimeline->context_id);
+
+	if (context)
+		ret = kgsl_readtimestamp(ktimeline->device, context, type);
+
+	kgsl_context_put(context);
+	return ret;
+}
+
+static void kgsl_sync_timeline_value_str(struct sync_timeline *sync_timeline,
+					 char *str, int size)
+{
+	struct kgsl_sync_timeline *ktimeline =
+		(struct kgsl_sync_timeline *) sync_timeline;
+	unsigned int timestamp_retired = kgsl_sync_get_timestamp(ktimeline,
+		KGSL_TIMESTAMP_RETIRED);
+	snprintf(str, size, "%u retired:%u", ktimeline->last_timestamp,
+		timestamp_retired);
+}
+
+static void kgsl_sync_pt_value_str(struct sync_pt *sync_pt,
+				   char *str, int size)
+{
+	struct kgsl_sync_pt *kpt = (struct kgsl_sync_pt *) sync_pt;
+	snprintf(str, size, "%u", kpt->timestamp);
+}
+
+static void kgsl_sync_timeline_release_obj(struct sync_timeline *sync_timeline)
+{
+	/*
+	 * Make sure to free the timeline only after destroy flag is set.
+	 * This is to avoid further accessing to the timeline from KGSL and
+	 * also to catch any unbalanced kref of timeline.
+	 */
+	BUG_ON(sync_timeline && (sync_timeline->destroyed != true));
+}
 static const struct sync_timeline_ops kgsl_sync_timeline_ops = {
+	.driver_name = "kgsl-timeline",
 	.dup = kgsl_sync_pt_dup,
 	.has_signaled = kgsl_sync_pt_has_signaled,
 	.compare = kgsl_sync_pt_compare,
 	.timeline_value_str = kgsl_sync_timeline_value_str,
 	.pt_value_str = kgsl_sync_pt_value_str,
+	.release_obj = kgsl_sync_timeline_release_obj,
 };
 
 int kgsl_sync_timeline_create(struct kgsl_context *context)
 {
 	struct kgsl_sync_timeline *ktimeline;
 
+	/* Generate a name which includes the thread name, thread id, process
+	 * name, process id, and context id. This makes it possible to
+	 * identify the context of a timeline in the sync dump. */
+	char ktimeline_name[sizeof(context->timeline->name)] = {};
+	snprintf(ktimeline_name, sizeof(ktimeline_name),
+		"%s_%.15s(%d)-%.15s(%d)-%d",
+		context->dev_priv->device->name,
+		current->group_leader->comm, current->group_leader->pid,
+		current->comm, current->pid, context->id);
+
 	context->timeline = sync_timeline_create(&kgsl_sync_timeline_ops,
-		(int) sizeof(struct kgsl_sync_timeline), "kgsl-timeline");
+		(int) sizeof(struct kgsl_sync_timeline), ktimeline_name);
 	if (context->timeline == NULL)
 		return -EINVAL;
 
 	ktimeline = (struct kgsl_sync_timeline *) context->timeline;
 	ktimeline->last_timestamp = 0;
+	ktimeline->device = context->dev_priv->device;
+	ktimeline->context_id = context->id;
 
 	return 0;
 }
