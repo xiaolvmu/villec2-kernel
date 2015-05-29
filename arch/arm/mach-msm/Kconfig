@@ -2275,6 +2275,38 @@ config MSM_STANDALONE_POWER_COLLAPSE
        bool "Enable standalone power collapse"
        default n
 
+#
+# CPU Hotplug Driver Dependencies
+#
+
+
+config MSM_MPDEC_INPUTBOOST_CPUMIN
+        bool "Enable kernel based mpdecision"
+        depends on MSM_MPDEC
+        default y
+        help
+          This pushes the cpu min speed to predefined values on input
+
+#
+# CPU Hotplug Driver Choices
+#
+
+choice
+	prompt "CPU HotPlug Driver Choice"
+	default MSM_MPDEC
+config MSM_MPDECISION
+	bool "MSM_MPDECISION from Qualcomm"
+	help
+	  Qualcomm's Closed-Source MPDECISION
+config MSM_MPDEC
+	bool "MSM_MPDECISION from @ShowP1984"
+	depends on MSM_SMP
+	select MSM_MPDEC_INPUTBOOST_CPUMIN
+	help
+	  This enables kernel based multi core control.
+	  (up/down hotplug based on load)
+endchoice
+
 config MSM_GSBI9_UART
 	bool "Enable GSBI9 UART device"
 	default n
