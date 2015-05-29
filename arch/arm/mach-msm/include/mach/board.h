@@ -468,6 +468,7 @@ struct msm_panel_common_pdata {
 	u32 mdp_bw_ib_factor;
 	u32 splash_screen_size;
 	u32 splash_screen_addr;
+
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *mdp_bus_scale_table;
 #endif
@@ -537,6 +538,7 @@ struct mipi_dsi_panel_platform_data {
 	char dlane_swap;
 	void (*dsi_pwm_cfg)(void);
 	char enable_wled_bl_ctrl;
+	void (*gpio_set_backlight)(int bl_level);
 	unsigned char (*shrink_pwm)(int val);
 };
 
