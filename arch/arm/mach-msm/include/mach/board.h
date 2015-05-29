@@ -487,6 +487,7 @@ struct msm_panel_common_pdata {
 struct lcdc_platform_data {
 	int (*lcdc_gpio_config)(int on);
 	int (*lcdc_power_save)(int);
+	int (*is_automotive_board)(void);
 	unsigned int (*lcdc_get_clk)(void);
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *bus_scale_table;
