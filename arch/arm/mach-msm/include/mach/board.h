@@ -466,6 +466,8 @@ struct msm_panel_common_pdata {
 	u32 mdp_max_bw;
 	u32 mdp_bw_ab_factor;
 	u32 mdp_bw_ib_factor;
+	u32 splash_screen_size;
+	u32 splash_screen_addr;
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *mdp_bus_scale_table;
 #endif
@@ -550,6 +552,7 @@ struct msm_wfd_platform_data {
 struct msm_fb_platform_data {
 	int (*detect_client)(const char *name);
 	int mddi_prescan;
+	unsigned char ext_resolution;
 	int (*allow_set_offset)(void);
 	char prim_panel_name[PANEL_NAME_MAX_LEN];
 	char ext_panel_name[PANEL_NAME_MAX_LEN];

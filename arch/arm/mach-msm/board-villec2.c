@@ -9098,6 +9098,8 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.mdp_max_bw = 2000000000,
 	.mdp_bw_ab_factor = 115,
 	.mdp_bw_ib_factor = 150,
+	.splash_screen_size = 0x00,
+	.splash_screen_addr = 0x00,
 #ifdef CONFIG_MSM_BUS_SCALING
 	.mdp_bus_scale_table = &mdp_bus_scale_pdata,
 #endif
