@@ -543,6 +543,10 @@ struct mipi_dsi_panel_platform_data {
 	unsigned char (*shrink_pwm)(int val);
 };
 
+struct mipi_dsi_i2c_platform_data {
+	unsigned pd_gpio;
+};
+
 struct lvds_panel_platform_data {
 	int *gpio;
 };
