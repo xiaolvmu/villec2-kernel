@@ -341,10 +341,6 @@ int mdp4_overlay_iommu_map_buf(struct msmfb_data *img,
 	if (!display_iclient)
 		return -EINVAL;
 
-	*srcp_ihdl = (img->flags == MSMFB_DATA_FLAG_ION_NOT_FD) ?
-		ion_dma_buf_to_handle(display_iclient,
-			(struct dma_buf *)(img->memory_id)) :
-		ion_import_dma_buf(display_iclient, img->memory_id);
 	if (IS_ERR_OR_NULL(*srcp_ihdl)) {
 		pr_err("ion_import_dma_buf() failed\n");
 		return PTR_ERR(*srcp_ihdl);

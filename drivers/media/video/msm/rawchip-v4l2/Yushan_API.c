@@ -2131,14 +2131,6 @@ uint8_t Yushan_parse_interrupt(void)
 
 	kfree(udwListOfInterrupts);
 
-	if (gpio_get_value(rawchip_intr0) == 1) {
-		atomic_set(&interrupt, 1);
-		wake_up(&yushan_int.yushan_wait);
-	}
-	if (gpio_get_value(rawchip_intr1) == 1) {
-		atomic_set(&interrupt2, 1);
-		wake_up(&yushan_int.yushan_wait);
-	}
 
 	return interrupt_type;
 }
@@ -2384,14 +2376,6 @@ void Yushan_ISR()
 
 	kfree(udwListOfInterrupts);
 
-	if (gpio_get_value(rawchip_intr0) == 1) {
-		atomic_set(&interrupt, 1);
-		wake_up(&yushan_int.yushan_wait);
-	}
-	if (gpio_get_value(rawchip_intr1) == 1) {
-		atomic_set(&interrupt2, 1);
-		wake_up(&yushan_int.yushan_wait);
-	}
 
 }
 
