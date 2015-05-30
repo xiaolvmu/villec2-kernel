@@ -593,6 +593,7 @@ struct msm_hdmi_platform_data {
 	bool is_mhl_enabled;
 	mhl_driving_params *driving_params;
 	int dirving_params_count;
+	char (*splash_is_enabled)(void);
 };
 
 struct msm_mhl_platform_data {
