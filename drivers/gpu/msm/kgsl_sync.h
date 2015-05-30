@@ -19,6 +19,8 @@
 struct kgsl_sync_timeline {
 	struct sync_timeline timeline;
 	unsigned int last_timestamp;
+	struct kgsl_device *device;
+	u32 context_id;
 };
 
 struct kgsl_sync_pt {
@@ -72,4 +74,4 @@ static inline void kgsl_sync_timeline_destroy(struct kgsl_context *context)
 }
 #endif
 
-#endif 
+#endif /* __KGSL_SYNC_H */

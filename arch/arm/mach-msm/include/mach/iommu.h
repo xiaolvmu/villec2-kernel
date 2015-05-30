@@ -46,6 +46,7 @@ struct msm_iommu_drvdata {
 	int ttbr_split;
 	struct clk *clk;
 	struct clk *pclk;
+	struct clk *aclk;
 	const char *name;
 	struct regulator *gdsc;
 };
@@ -119,8 +120,6 @@ static inline struct device *msm_iommu_get_ctx(const char *ctx_name)
 }
 #endif
 
-#endif
-
 static inline int msm_soc_version_supports_iommu_v1(void)
 {
 #ifdef CONFIG_OF
@@ -143,3 +142,4 @@ static inline int msm_soc_version_supports_iommu_v1(void)
 	}
 	return 1;
 }
+#endif
