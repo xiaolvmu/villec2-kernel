@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -621,6 +621,8 @@ int mdp4_dtv_on(struct platform_device *pdev)
 	/* Mdp clock enable */
 	mdp_clk_ctrl(1);
 
+	mdp4_overlay_panel_mode(MDP4_MIXER1, MDP4_PANEL_DTV);
+
 	/* Allocate dtv_pipe at dtv_on*/
 	if (vctrl->base_pipe == NULL) {
 		if (mdp4_overlay_dtv_set(mfd, NULL)) {
@@ -630,11 +632,6 @@ int mdp4_dtv_on(struct platform_device *pdev)
 			return -EINVAL;
 		}
 	}
-
-	if (IS_ERR_OR_NULL(vctrl->base_pipe))
-		return -EPERM;
-
-	mdp4_overlay_panel_mode(MDP4_PANEL_DTV, vctrl->base_pipe->mixer_num);
 
 	ret = panel_next_on(pdev);
 	if (ret != 0)
@@ -704,7 +701,7 @@ int mdp4_dtv_off(struct platform_device *pdev)
 
 	atomic_set(&vctrl->suspend, 1);
 
-	mdp4_overlay_panel_mode_unset(MDP4_PANEL_DTV, mixer);
+	mdp4_overlay_panel_mode_unset(MDP4_MIXER1, MDP4_PANEL_DTV);
 
 	undx =  vctrl->update_ndx;
 	vp = &vctrl->vlist[undx];
@@ -884,7 +881,7 @@ int mdp4_overlay_dtv_set(struct msm_fb_data_type *mfd,
 	if (pipe != NULL && pipe->mixer_stage == MDP4_MIXER_STAGE_BASE &&
 			pipe->pipe_type == OVERLAY_TYPE_RGB)
 		vctrl->base_pipe = pipe; /* keep it */
-	else if (!hdmi_prim_display && mdp4_overlay_borderfill_supported(mfd))
+	else if (!hdmi_prim_display && mdp4_overlay_borderfill_supported())
 		mdp4_overlay_dtv_alloc_pipe(mfd, OVERLAY_TYPE_BF, vctrl);
 	else
 		mdp4_overlay_dtv_alloc_pipe(mfd, OVERLAY_TYPE_RGB, vctrl);

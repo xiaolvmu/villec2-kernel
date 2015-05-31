@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -53,7 +53,6 @@ typedef enum {
 	DISPLAY_1 = 0,		/* attached as first device */
 	DISPLAY_2,		/* attached on second device */
 	DISPLAY_3,              /* attached on third writeback device */
-	DISPLAY_4,		/* attached on third dsi/lvds device */
 	MAX_PHYS_TARGET_NUM,
 } DISP_TARGET_PHYS;
 
@@ -177,8 +176,10 @@ struct msm_panel_info {
 	__u32 is_3d_panel;
 	__u32 frame_rate;
 	__u32 frame_interval;
+#ifdef CONFIG_MACH_HTC
 	__u32 width;
 	__u32 height;
+#endif
 
 	struct mddi_panel_info mddi;
 	struct lcd_panel_info lcd;
@@ -213,6 +214,12 @@ struct msm_fb_panel_data {
 	int (*clk_func) (int enable);
 	int (*fps_level_change) (struct platform_device *pdev,
 					u32 fps_level);
+#ifdef CONFIG_CABC_DIMMING_SWITCH
+	void (*dimming_on) (struct msm_fb_data_type *);
+#endif
+#ifdef CONFIG_SRE_CONTROL
+	void (*sre_ctrl) (struct msm_fb_data_type *, unsigned long);
+#endif
 };
 
 /*===========================================================================
@@ -231,7 +238,5 @@ int lcdc_device_register(struct msm_panel_info *pinfo);
 
 int mddi_toshiba_device_register(struct msm_panel_info *pinfo,
 					u32 channel, u32 panel);
-int mipi_dsi_i2c_video_wvga_device_register(u32 pdest);
-int mipi_dsi_i2c_video_xga_device_register(u32 pdest);
 
 #endif /* MSM_FB_PANEL_H */

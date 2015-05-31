@@ -40,16 +40,14 @@
 #include <linux/switch.h>
 #include <linux/msm_mdp.h>
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-#endif
-
 #include "msm_fb_panel.h"
 #include "mdp.h"
 
 #define MSM_FB_DEFAULT_PAGE_SIZE 2
 #define MFD_KEY  0x11161126
 #define MSM_FB_MAX_DEV_LIST 32
+/* Disable EARLYSUSPEND for mdp driver */
+#define DISABLE_EARLY_SUSPEND
 
 struct disp_info_type_suspend {
 	boolean op_enable;
@@ -164,11 +162,13 @@ struct msm_fb_data_type {
 	struct dentry *sub_dir;
 #endif
 
+#ifndef DISABLE_EARLY_SUSPEND
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend early_suspend;
 #ifdef CONFIG_FB_MSM_MDDI
 	struct early_suspend mddi_early_suspend;
 	struct early_suspend mddi_ext_early_suspend;
+#endif
 #endif
 #endif
 	u32 mdp_fb_page_protection;
@@ -218,7 +218,16 @@ struct msm_fb_data_type {
 	uint32 sec_mapped;
 	uint32 sec_active;
 	uint32 max_map_size;
-	boolean bf_supported;
+#ifdef CONFIG_CABC_DIMMING_SWITCH
+	struct workqueue_struct *dimming_wq;
+	struct work_struct dimming_work;
+	struct timer_list dimming_update_timer;
+#endif
+#ifdef CONFIG_SRE_CONTROL
+	struct workqueue_struct *sre_wq;
+	struct work_struct sre_work;
+	struct timer_list sre_update_timer;
+#endif
 };
 struct msm_fb_backup_type {
 	struct fb_info info;
@@ -246,9 +255,11 @@ void msm_fb_wait_for_fence(struct msm_fb_data_type *mfd);
 int msm_fb_signal_timeline(struct msm_fb_data_type *mfd);
 void msm_fb_release_timeline(struct msm_fb_data_type *mfd);
 void msm_fb_release_busy(struct msm_fb_data_type *mfd);
+
 #ifdef CONFIG_FB_BACKLIGHT
 void msm_fb_config_backlight(struct msm_fb_data_type *mfd);
 #endif
+void mdp_color_enhancement(const struct mdp_table_entry *reg_seq, int size);
 
 void fill_black_screen(bool on, uint8 pipe_num, uint8 mixer_num);
 int msm_fb_check_frame_rate(struct msm_fb_data_type *mfd,

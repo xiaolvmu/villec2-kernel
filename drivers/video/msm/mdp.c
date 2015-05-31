@@ -2,7 +2,7 @@
  *
  * MSM MDP Interface (used by framebuffer core)
  *
- * Copyright (c) 2007-2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2014, The Linux Foundation. All rights reserved.
  * Copyright (C) 2007 Google Incorporated
  *
  * This software is licensed under the terms of the GNU General Public
@@ -43,6 +43,10 @@
 #include "mdp4.h"
 #endif
 #include "mipi_dsi.h"
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#undef CONFIG_HAS_EARLYSUSPEND
+#endif
 
 uint32 mdp4_extn_disp;
 u32 mdp_iommu_max_map_size;
@@ -170,8 +174,6 @@ static uint32 mdp_prim_panel_type = NO_PANEL;
 struct list_head mdp_hist_lut_list;
 DEFINE_MUTEX(mdp_hist_lut_list_mutex);
 uint32_t last_lut[MDP_HIST_LUT_SIZE];
-
-static int mdp_on_init_cnt;
 
 uint32_t mdp_block2base(uint32_t block)
 {
@@ -942,7 +944,6 @@ int mdp_histogram_block2mgmt(uint32_t block, struct mdp_hist_mgmt **mgmt)
 
 	return ret;
 }
-
 
 static int mdp_histogram_enable(struct mdp_hist_mgmt *mgmt)
 {
@@ -2167,7 +2168,7 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 
 		/* DMA_E LCD-Out Complete */
 		if (mdp_interrupt & MDP_DMA_E_DONE) {
-			dma = &dma_e_data;
+			dma = &dma_s_data;
 			dma->busy = FALSE;
 			mdp_pipe_ctrl(MDP_DMA_E_BLOCK, MDP_BLOCK_POWER_OFF,
 									TRUE);
@@ -2264,10 +2265,9 @@ static void mdp_drv_init(void)
 
 	dma_s_data.busy = FALSE;
 	dma_s_data.waiting = FALSE;
-	dma_s_data.dmap_busy = FALSE;
 	init_completion(&dma_s_data.comp);
 	sema_init(&dma_s_data.mutex, 1);
-	mutex_init(&dma_s_data.ov_mutex);
+
 #ifndef CONFIG_FB_MSM_MDP303
 	dma_e_data.busy = FALSE;
 	dma_e_data.waiting = FALSE;
@@ -2372,31 +2372,19 @@ static int mdp_fps_level_change(struct platform_device *pdev, u32 fps_level)
 	ret = panel_next_fps_level_change(pdev, fps_level);
 	return ret;
 }
-
 static int mdp_off(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
 
 	pr_debug("%s:+\n", __func__);
+	mdp_histogram_ctrl_all(FALSE);
 	atomic_set(&vsync_cntrl.suspend, 1);
 	atomic_set(&vsync_cntrl.vsync_resume, 0);
 	complete_all(&vsync_cntrl.vsync_wait);
 
 	mdp_clk_ctrl(1);
-
-	if (mdp_on_init_cnt) {
-		mdp_on_init_cnt--;
-		if (!mdp_on_init_cnt) {
-			mdp_histogram_ctrl_all(FALSE);
-			mdp_lut_status_backup();
-		}
-	} else {
-		pr_err("mdp was not initialized\n");
-		mdp_clk_ctrl(0);
-		return ret;
-	}
-
+	mdp_lut_status_backup();
 	ret = panel_next_early_off(pdev);
 
 	if (mfd->panel.type == MIPI_CMD_PANEL)
@@ -2435,6 +2423,10 @@ void mdp4_hw_init(void)
 #endif
 
 static int mdp_bus_scale_restore_request(void);
+static struct msm_panel_common_pdata *mdp_pdata;
+
+static bool mdp_gamma_cooler_colors = false;
+module_param(mdp_gamma_cooler_colors, bool, 0664);
 
 static int mdp_on(struct platform_device *pdev)
 {
@@ -2448,8 +2440,7 @@ static int mdp_on(struct platform_device *pdev)
 	if (!(mfd->cont_splash_done)) {
 		if (mfd->panel.type == MIPI_VIDEO_PANEL)
 			mdp4_dsi_video_splash_done();
-		else if (mfd->panel.type == LVDS_PANEL)
-			mdp4_lcdc_splash_done();
+
 		/* Clks are enabled in probe.
 		Disabling clocks now */
 		mdp_clk_ctrl(0);
@@ -2468,19 +2459,16 @@ static int mdp_on(struct platform_device *pdev)
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 		mdp_clk_ctrl(1);
 		mdp_bus_scale_restore_request();
+		mdp4_hw_init();
 
-		if (!mdp_on_init_cnt) {
-			mdp4_hw_init();
-			/* Initialize HistLUT to last LUT */
-			for (i = 0; i < MDP_HIST_LUT_SIZE; i++) {
-				MDP_OUTP(MDP_BASE + 0x94800 + i*4, last_lut[i]);
-				MDP_OUTP(MDP_BASE + 0x94C00 + i*4, last_lut[i]);
-			}
-			mdp_lut_status_restore();
-			outpdw(MDP_BASE + 0x0038, mdp4_display_intf);
-			mdp_on_init_cnt++;
+		/* Initialize HistLUT to last LUT */
+		for (i = 0; i < MDP_HIST_LUT_SIZE; i++) {
+			MDP_OUTP(MDP_BASE + 0x94800 + i*4, last_lut[i]);
+			MDP_OUTP(MDP_BASE + 0x94C00 + i*4, last_lut[i]);
 		}
 
+		mdp_lut_status_restore();
+		outpdw(MDP_BASE + 0x0038, mdp4_display_intf);
 		if (mfd->panel.type == MIPI_CMD_PANEL) {
 			mdp_vsync_cfg_regs(mfd, FALSE);
 			mdp4_dsi_cmd_on(pdev);
@@ -2504,6 +2492,11 @@ static int mdp_on(struct platform_device *pdev)
 	}
 
 	mdp_histogram_ctrl_all(TRUE);
+
+	if (mdp_pdata->mdp_gamma && !mdp_gamma_cooler_colors)
+		mdp_pdata->mdp_gamma();
+	else if (mdp_pdata->mdp_gamma_cool && mdp_gamma_cooler_colors)
+		mdp_pdata->mdp_gamma_cool();
 
 	if (ret == 0)
 		ret = panel_next_late_init(pdev);
@@ -2830,6 +2823,43 @@ static int mdp_irq_clk_setup(struct platform_device *pdev,
 	return 0;
 }
 
+static int mdp_write_reg_mask(uint32_t reg, uint32_t val, uint32_t mask)
+{
+        uint32_t oldval, newval;
+
+        oldval = inpdw(MDP_BASE + reg);
+
+        oldval &= (~mask);
+        val &= mask;
+        newval = oldval | val;
+
+        outpdw(MDP_BASE + reg, newval);
+
+        return 0;
+
+}
+
+void mdp_color_enhancement(const struct mdp_table_entry *reg_seq, int size)
+{
+        int i;
+
+        printk(KERN_INFO "%s\n", __func__);
+
+        mdp_clk_ctrl(1);
+        mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+        for (i = 0; i < size; i++) {
+                if (reg_seq[i].mask == 0x0)
+                        outpdw(MDP_BASE + reg_seq[i].reg, reg_seq[i].val);
+                else
+                        mdp_write_reg_mask(reg_seq[i].reg, reg_seq[i].val, reg_seq[i].mask);
+        }
+        mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+        mdp_clk_ctrl(0);
+
+        return ;
+}
+
+
 static int mdp_probe(struct platform_device *pdev)
 {
 	struct platform_device *msm_fb_dev = NULL;
@@ -2853,7 +2883,7 @@ static int mdp_probe(struct platform_device *pdev)
 		size =  resource_size(&pdev->resource[0]);
 		msm_mdp_base = ioremap(pdev->resource[0].start, size);
 
-		MSM_FB_INFO("MDP HW Base phy_Address = 0x%x virt = 0x%x\n",
+		MSM_FB_DEBUG("MDP HW Base phy_Address = 0x%x virt = 0x%x\n",
 			(int)pdev->resource[0].start, (int)msm_mdp_base);
 
 		if (unlikely(!msm_mdp_base))
@@ -2981,19 +3011,18 @@ static int mdp_probe(struct platform_device *pdev)
 				pr_err("DMA ALLOC FAILED for SPLASH\n");
 				return -ENOMEM;
 			}
-
 			cp = (char *)ioremap(
 					mdp_pdata->splash_screen_addr,
 					mdp_pdata->splash_screen_size);
-			if (cp) {
-				memcpy(mfd->copy_splash_buf, cp,
+			if (!cp) {
+				pr_err("IOREMAP FAILED for SPLASH\n");
+				return -ENOMEM;
+			}
+			memcpy(mfd->copy_splash_buf, cp,
 					mdp_pdata->splash_screen_size);
 
-				MDP_OUTP(MDP_BASE + 0x90008,
+			MDP_OUTP(MDP_BASE + 0x90008,
 					mfd->copy_splash_phys);
-			} else {
-				pr_err("IOREMAP FAILED for SPLASH\n");
-			}
 		}
 
 		mfd->cont_splash_done = (1 - mdp_pdata->cont_splash_enabled);
@@ -3096,9 +3125,6 @@ static int mdp_probe(struct platform_device *pdev)
 		if (mfd->panel_info.pdest == DISPLAY_1) {
 			if_no = PRIMARY_INTF_SEL;
 			mfd->dma = &dma2_data;
-		} else if (mfd->panel_info.pdest == DISPLAY_4) {
-			if_no = SECONDARY_INTF_SEL;
-			mfd->dma = &dma_s_data;
 		} else {
 			if_no = EXTERNAL_INTF_SEL;
 			mfd->dma = &dma_e_data;
@@ -3219,22 +3245,8 @@ static int mdp_probe(struct platform_device *pdev)
 			mdp4_display_intf_sel(EXTERNAL_INTF_SEL, LCDC_RGB_INTF);
 		} else {
 			mfd->dma = &dma2_data;
-			if (mfd->panel_info.pdest == DISPLAY_4)
-				mdp4_display_intf_sel(SECONDARY_INTF_SEL,
-					LCDC_RGB_INTF);
-			else
-				mdp4_display_intf_sel(PRIMARY_INTF_SEL,
-					LCDC_RGB_INTF);
+			mdp4_display_intf_sel(PRIMARY_INTF_SEL, LCDC_RGB_INTF);
 		}
-		/*
-		 * There is just a single underrun when lcdc timing
-		 * generator is enabled for no obvious reasons.  As a
-		 * workaround the underrun color is disabled here, so
-		 * that the single underrun won't have any visual
-		 * effect. Later, when the underrun is recoved, the
-		 * underrun color is restored.
-		 */
-		MDP_OUTP(MDP_BASE + 0xc002c, 0x80000000);
 #else
 		mfd->dma = &dma2_data;
 		mfd->vsync_ctrl = mdp_dma_lcdc_vsync_ctrl;
@@ -3469,12 +3481,16 @@ static void mdp_early_suspend(struct early_suspend *h)
 #ifdef CONFIG_FB_MSM_DTV
 	mdp4_dtv_set_black_screen();
 #endif
+#if 0
 	mdp_footswitch_ctrl(FALSE);
+#endif
 }
 
 static void mdp_early_resume(struct early_suspend *h)
 {
+#if 0
 	mdp_footswitch_ctrl(TRUE);
+#endif
 	mutex_lock(&mdp_suspend_mutex);
 	mdp_suspended = FALSE;
 	mutex_unlock(&mdp_suspend_mutex);

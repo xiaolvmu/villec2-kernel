@@ -1,7 +1,7 @@
 /* drivers/video/msm/src/drv/mdp/mdp_ppp.c
  *
  * Copyright (C) 2007 Google Incorporated
- * Copyright (c) 2008-2009, 2012, 2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2009, 2012 The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -45,7 +45,6 @@
 static uint32_t bytes_per_pixel[] = {
 	[MDP_RGB_565] = 2,
 	[MDP_RGB_888] = 3,
-	[MDP_BGR_888] = 3,
 	[MDP_XRGB_8888] = 4,
 	[MDP_ARGB_8888] = 4,
 	[MDP_RGBA_8888] = 4,
@@ -404,7 +403,6 @@ static void mdp_ppp_setbg(MDPIBUF *iBuf)
 		break;
 
 	case MDP_RGB_888:
-	case MDP_BGR_888:
 		/*
 		 * 888 = 3bytes
 		 * RGB = 3Components
@@ -415,12 +413,8 @@ static void mdp_ppp_setbg(MDPIBUF *iBuf)
 		PPP_SRC_INTERLVD_3COMPONENTS | PPP_SRC_UNPACK_TIGHT |
 		PPP_SRC_UNPACK_ALIGN_LSB | PPP_SRC_FETCH_PLANES_INTERLVD;
 
-		if (iBuf->ibuf_type == MDP_RGB_888)
-			unpack_pattern =
-			    MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8);
-		else
-			unpack_pattern =
-			    MDP_GET_PACK_PATTERN(0, CLR_B, CLR_G, CLR_R, 8);
+		unpack_pattern =
+		    MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8);
 		break;
 
 	case MDP_BGRA_8888:
@@ -633,13 +627,8 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 	 */
 	switch (iBuf->ibuf_type) {
 	case MDP_RGB_888:
-	case MDP_BGR_888:
-		if (iBuf->ibuf_type == MDP_RGB_888)
-			dst_packPattern =
-			    MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8);
-		else
-			dst_packPattern =
-			    MDP_GET_PACK_PATTERN(0, CLR_B, CLR_G, CLR_R, 8);
+		dst_packPattern =
+		    MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8);
 		ppp_dst_cfg_reg =
 		    PPP_DST_C0G_8BIT | PPP_DST_C1B_8BIT | PPP_DST_C2R_8BIT |
 		    PPP_DST_PACKET_CNT_INTERLVD_3ELEM | PPP_DST_PACK_TIGHT |
@@ -824,10 +813,9 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 	/* source config */
 	switch (iBuf->mdpImg.imgType) {
 	case MDP_RGB_888:
-	case MDP_BGR_888:
 		inpBpp = 3;
 		/*
-		 * 888 = 3bytes
+		 * 565 = 2bytes
 		 * RGB = 3Components
 		 * RGB interleaved
 		 */
@@ -837,12 +825,7 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 			PPP_SRC_UNPACK_ALIGN_LSB |
 			PPP_SRC_FETCH_PLANES_INTERLVD;
 
-		if (iBuf->mdpImg.imgType == MDP_RGB_888)
-			packPattern =
-			    MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8);
-		else
-			packPattern =
-			    MDP_GET_PACK_PATTERN(0, CLR_B, CLR_G, CLR_R, 8);
+		packPattern = MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 8);
 
 		ppp_operation_reg |= PPP_OP_COLOR_SPACE_RGB |
 		    PPP_OP_SRC_CHROMA_RGB | PPP_OP_DST_CHROMA_RGB;

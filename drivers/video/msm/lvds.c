@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -30,7 +30,7 @@
 #include <linux/clk.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
-#include <mach/socinfo.h>
+
 #include "msm_fb.h"
 #include "mdp4.h"
 
@@ -73,10 +73,7 @@ static void lvds_init(struct msm_fb_data_type *mfd)
 		MDP_OUTP(MDP_BASE + 0xc3000, 0x08);
 		MDP_OUTP(MDP_BASE + 0xc3004, 0x4c);
 		MDP_OUTP(MDP_BASE + 0xc3008, 0x30);
-		if (machine_is_apq8064_mplatform())
-			MDP_OUTP(MDP_BASE + 0xc300c, 0xc7);
-		else
-			MDP_OUTP(MDP_BASE + 0xc300c, 0xc3);
+		MDP_OUTP(MDP_BASE + 0xc300c, 0xc3);
 		MDP_OUTP(MDP_BASE + 0xc3014, 0x10);
 		MDP_OUTP(MDP_BASE + 0xc3018, 0x04);
 		MDP_OUTP(MDP_BASE + 0xc301c, 0x62);
@@ -95,28 +92,10 @@ static void lvds_init(struct msm_fb_data_type *mfd)
 		MDP_OUTP(MDP_BASE + 0xc3000, 0x11);
 		MDP_OUTP(MDP_BASE + 0xc3064, 0x05);
 		MDP_OUTP(MDP_BASE + 0xc3050, 0x20);
-	} else if (mfd->panel_info.clk_rate == 79400000) {
-		MDP_OUTP(MDP_BASE + 0xc3004, 0x87);
-		MDP_OUTP(MDP_BASE + 0xc3008, 0x30);
-		MDP_OUTP(MDP_BASE + 0xc300c, 0x06);
-		MDP_OUTP(MDP_BASE + 0xc3014, 0x20);
-		MDP_OUTP(MDP_BASE + 0xc3018, 0x0F);
-		MDP_OUTP(MDP_BASE + 0xc301c, 0x01);
-		MDP_OUTP(MDP_BASE + 0xc3020, 0x41);
-		MDP_OUTP(MDP_BASE + 0xc3024, 0x0d);
-	} else if (mfd->panel_info.clk_rate == 37100000) {
-		MDP_OUTP(MDP_BASE + 0xc3004, 0x47);
-		MDP_OUTP(MDP_BASE + 0xc3008, 0x30);
-		MDP_OUTP(MDP_BASE + 0xc300c, 0x04);
-		MDP_OUTP(MDP_BASE + 0xc3014, 0x20);
-		MDP_OUTP(MDP_BASE + 0xc3018, 0x08);
-		MDP_OUTP(MDP_BASE + 0xc301c, 0x02);
-		MDP_OUTP(MDP_BASE + 0xc3020, 0x42);
-		MDP_OUTP(MDP_BASE + 0xc3024, 0x14);
 	} else {
 		MDP_OUTP(MDP_BASE + 0xc3004, 0x8f);
 		MDP_OUTP(MDP_BASE + 0xc3008, 0x30);
-		MDP_OUTP(MDP_BASE + 0xc300c, 0xc8);
+		MDP_OUTP(MDP_BASE + 0xc300c, 0xc6);
 		MDP_OUTP(MDP_BASE + 0xc3014, 0x10);
 		MDP_OUTP(MDP_BASE + 0xc3018, 0x07);
 		MDP_OUTP(MDP_BASE + 0xc301c, 0x62);

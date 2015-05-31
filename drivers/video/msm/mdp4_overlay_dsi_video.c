@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -63,7 +63,6 @@ static struct vsycn_ctrl {
 	spinlock_t spin_lock;
 	struct msm_fb_data_type *mfd;
 	struct mdp4_overlay_pipe *base_pipe;
-	int base_ref_cnt;
 	struct vsync_update vlist[2];
 	int vsync_irq_enabled;
 	ktime_t vsync_time;
@@ -294,41 +293,25 @@ int mdp4_dsi_video_pipe_commit(int cndx, int wait)
 
 static void mdp4_video_vsync_irq_ctrl(int cndx, int enable)
 {
-	struct vsycn_ctrl *vctrl = NULL;
-	int intr = 0;
-	int term = 0;
+	struct vsycn_ctrl *vctrl;
 
 	vctrl = &vsync_ctrl_db[cndx];
 
 	mutex_lock(&vctrl->update_lock);
-	if (vctrl->base_pipe->mixer_num == MDP4_MIXER0) {
-		intr = INTR_PRIMARY_VSYNC;
-		term = MDP_PRIM_VSYNC_TERM;
-	} else if (vctrl->base_pipe->mixer_num == MDP4_MIXER1) {
-		intr = INTR_EXTERNAL_VSYNC;
-		term = MDP_EXTER_VSYNC_TERM;
-	} else if (vctrl->base_pipe->mixer_num == MDP4_MIXER_NONE) {
-		intr = INTR_SECONDARY_VSYNC;
-		term = MDP_SEC_VSYNC_TERM;
-	} else
-		pr_err("%s: wrong mixer_number=%d\n",
-				__func__, vctrl->base_pipe->mixer_num);
-
-	if (intr != 0) {
-		if (enable) {
+	if (enable) {
+		if (vsync_irq_cnt == 0)
+			vsync_irq_enable(INTR_PRIMARY_VSYNC,
+						MDP_PRIM_VSYNC_TERM);
+		vsync_irq_cnt++;
+	} else {
+		if (vsync_irq_cnt) {
+			vsync_irq_cnt--;
 			if (vsync_irq_cnt == 0)
-				vsync_irq_enable(intr, term);
-			vsync_irq_cnt++;
-		} else {
-			if (vsync_irq_cnt) {
-				vsync_irq_cnt--;
-				if (vsync_irq_cnt == 0)
-					vsync_irq_disable(intr, term);
-			}
+				vsync_irq_disable(INTR_PRIMARY_VSYNC,
+						MDP_PRIM_VSYNC_TERM);
 		}
 	}
-	pr_debug("%s: enable=%d cnt=%d intr=0x%x\n",
-				__func__, enable, vsync_irq_cnt, intr);
+	pr_debug("%s: enable=%d cnt=%d\n", __func__, enable, vsync_irq_cnt);
 	mutex_unlock(&vctrl->update_lock);
 }
 
@@ -493,62 +476,25 @@ void mdp4_dsi_vsync_init(int cndx)
 	init_waitqueue_head(&vctrl->wait_queue);
 }
 
-struct mdp4_overlay_pipe *mdp4_dsi_video_alloc_base_pipe(void)
-{
-	struct vsycn_ctrl *vctrl = &vsync_ctrl_db[0];
-	struct mdp4_overlay_pipe *pipe = NULL;
-
-	if (!vctrl->mfd) {
-		pr_err("%s: mfd is null\n", __func__);
-		goto alloc_b_err;
-	}
-
-	if (!vctrl->base_ref_cnt && !vctrl->base_pipe) {
-		if (vctrl->mfd->panel_info.pdest == DISPLAY_1) {
-			vctrl->base_pipe = mdp4_alloc_base_primary(vctrl->mfd);
-		} else if (vctrl->mfd->panel_info.pdest == DISPLAY_4) {
-			vctrl->base_pipe =
-				mdp4_alloc_base_secondary(vctrl->mfd);
-		} else {
-			pr_err("wrong pdest=%d for base pipe\n",
-				vctrl->mfd->panel_info.pdest);
-			goto alloc_b_err;
-		}
-	}
-
-	pipe = vctrl->base_pipe;
-	vctrl->base_ref_cnt++;
-
-alloc_b_err:
-	return pipe;
-}
-
 void mdp4_dsi_video_free_base_pipe(struct msm_fb_data_type *mfd)
 {
 	struct vsycn_ctrl *vctrl;
 	struct mdp4_overlay_pipe *pipe;
 
 	vctrl = &vsync_ctrl_db[0];
+	pipe = vctrl->base_pipe;
 
-	if (!vctrl->base_ref_cnt) {
-		pr_err("%s: no more base_pipe\n", __func__);
-		return;
-	}
+	if (pipe == NULL)
+		return ;
+	/* adb stop */
+	if (pipe->pipe_type == OVERLAY_TYPE_BF)
+		mdp4_overlay_borderfill_stage_down(pipe);
 
-	vctrl->base_ref_cnt--;
-
-	if (!vctrl->base_ref_cnt && vctrl->base_pipe) {
-		/* adb stop */
-		pipe = vctrl->base_pipe;
-		if (pipe->pipe_type == OVERLAY_TYPE_BF)
-			mdp4_overlay_borderfill_stage_down(pipe);
-
-		/* base pipe may change after borderfill_stage_down */
-		pipe = vctrl->base_pipe;
-		mdp4_mixer_stage_down(pipe, 1);
-		mdp4_overlay_pipe_free(pipe, 1);
-		vctrl->base_pipe = NULL;
-	}
+	/* base pipe may change after borderfill_stage_down */
+	pipe = vctrl->base_pipe;
+	mdp4_mixer_stage_down(pipe, 1);
+	mdp4_overlay_pipe_free(pipe, 1);
+	vctrl->base_pipe = NULL;
 }
 
 void mdp4_dsi_video_base_swap(int cndx, struct mdp4_overlay_pipe *pipe)
@@ -619,7 +565,7 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	int hsync_end_x;
 	uint8 *buf;
 	unsigned int buf_offset;
-	int bpp;
+	int bpp, ptype;
 	struct fb_info *fbi;
 	struct fb_var_screeninfo *var;
 	struct msm_fb_data_type *mfd;
@@ -653,21 +599,37 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	fbi = mfd->fbi;
 	var = &fbi->var;
 
-	pipe = mdp4_dsi_video_alloc_base_pipe();
-	if (IS_ERR_OR_NULL(pipe)) {
-		mutex_unlock(&mfd->dma->ov_mutex);
-		return -EPERM;
-	}
-
-	if (mfd->panel_info.pdest == DISPLAY_4)
-		mdp4_overlay_panel_mode(MDP4_PANEL_DSI_VIDEO_DMA_S,
-					pipe->mixer_num);
-	else
-		mdp4_overlay_panel_mode(MDP4_PANEL_DSI_VIDEO, pipe->mixer_num);
-
 	bpp = fbi->var.bits_per_pixel / 8;
 	buf = (uint8 *) fbi->fix.smem_start;
 	buf_offset = calc_fb_offset(mfd, fbi, bpp);
+
+	if (vctrl->base_pipe == NULL) {
+		ptype = mdp4_overlay_format2type(mfd->fb_imgType);
+		if (ptype < 0)
+			printk(KERN_INFO "%s: format2type failed\n", __func__);
+		pipe = mdp4_overlay_pipe_alloc(ptype, MDP4_MIXER0);
+		if (pipe == NULL) {
+			printk(KERN_INFO "%s: pipe_alloc failed\n", __func__);
+			mutex_unlock(&mfd->dma->ov_mutex);
+			return -EBUSY;
+		}
+		pipe->pipe_used++;
+		pipe->mixer_stage  = MDP4_MIXER_STAGE_BASE;
+		pipe->mixer_num  = MDP4_MIXER0;
+		pipe->src_format = mfd->fb_imgType;
+		mdp4_overlay_panel_mode(pipe->mixer_num, MDP4_PANEL_DSI_VIDEO);
+		ret = mdp4_overlay_format2pipe(pipe);
+		if (ret < 0)
+			printk(KERN_INFO "%s: format2type failed\n", __func__);
+
+		pipe->ov_blt_addr = 0;
+		pipe->dma_blt_addr = 0;
+		vctrl->base_pipe = pipe; /* keep it */
+		mdp4_init_writeback_buf(mfd, MDP4_MIXER0);
+
+	} else {
+		pipe = vctrl->base_pipe;
+	}
 
 	atomic_set(&vctrl->suspend, 0);
 
@@ -764,10 +726,6 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	ctrl_polarity =
 	    (data_en_polarity << 2) | (vsync_polarity << 1) | (hsync_polarity);
 
-	/* start dma_s */
-	if (mfd->panel_info.pdest == DISPLAY_4)
-		MDP_OUTP(MDP_BASE + 0x10, 0x1);
-
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE + 0x4, hsync_ctrl);
 	MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE + 0x8, vsync_period * hsync_period);
@@ -841,7 +799,15 @@ int mdp4_dsi_video_off(struct platform_device *pdev)
 		mixer = pipe->mixer_num;
 		mdp4_overlay_unset_mixer(mixer);
 		if (mfd->ref_cnt == 0) {
-			mdp4_dsi_video_free_base_pipe(mfd);
+			/* adb stop */
+			if (pipe->pipe_type == OVERLAY_TYPE_BF)
+				mdp4_overlay_borderfill_stage_down(pipe);
+
+			/* base pipe may change after borderfill_stage_down */
+			pipe = vctrl->base_pipe;
+			mdp4_mixer_stage_down(pipe, 1);
+			mdp4_overlay_pipe_free(pipe, 1);
+			vctrl->base_pipe = NULL;
 		} else {
 			/* system suspending */
 			mdp4_mixer_stage_down(vctrl->base_pipe, 1);
@@ -915,9 +881,9 @@ void mdp4_dsi_video_3d_sbys(struct msm_fb_data_type *mfd,
 	pipe->src_width_3d = r3d->width;
 
 	if (pipe->is_3d)
-		mdp4_overlay_panel_3d(MDP4_3D_SIDE_BY_SIDE);
+		mdp4_overlay_panel_3d(pipe->mixer_num, MDP4_3D_SIDE_BY_SIDE);
 	else
-		mdp4_overlay_panel_3d(MDP4_3D_NONE);
+		mdp4_overlay_panel_3d(pipe->mixer_num, MDP4_3D_NONE);
 
 	fbi = mfd->fbi;
 
