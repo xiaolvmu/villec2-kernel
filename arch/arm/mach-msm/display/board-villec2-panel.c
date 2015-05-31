@@ -15,6 +15,7 @@
 #include "../../../../drivers/video/msm/mdp4.h"
 
 #include <mach/gpio.h>
+#include <linux/gpio.h>
 #include <mach/panel_id.h>
 #include <mach/msm_bus_board.h>
 #include <linux/mfd/pmic8058.h>
