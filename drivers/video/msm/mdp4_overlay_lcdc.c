@@ -115,8 +115,6 @@ static void mdp4_overlay_lcdc_start(struct vsycn_ctrl *vctrl)
 		lcdc_enabled = 1;
 		spin_unlock_irqrestore(&mdp_spin_lock, flag);
 
-		if (!(machine_is_apq8064_adp2_es2() ||
-				machine_is_apq8064_adp2_es2p5())) {
 			/*
 			 * A single unknown-cause underrun may happen. Wait
 			 * until the underrun instance is over and restore
@@ -133,7 +131,6 @@ static void mdp4_overlay_lcdc_start(struct vsycn_ctrl *vctrl)
 			}
 		}
 	}
-}
 
 /*
  * mdp4_lcdc_pipe_queue:
