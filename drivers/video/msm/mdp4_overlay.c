@@ -330,7 +330,7 @@ void mdp4_overlay_iommu_pipe_free(int ndx, int all)
 	mutex_unlock(&iommu_mutex);
 }
 
-int mdp4_overlay_iommu_map_buf(struct msmfb_data *img,
+int mdp4_overlay_iommu_map_buf(int mem_id,
 	struct mdp4_overlay_pipe *pipe, unsigned int plane,
 	unsigned long *start, unsigned long *len,
 	struct ion_handle **srcp_ihdl)
@@ -342,17 +342,12 @@ int mdp4_overlay_iommu_map_buf(struct msmfb_data *img,
 	if (!display_iclient)
 		return -EINVAL;
 
-	*srcp_ihdl = (img->flags == MSMFB_DATA_FLAG_ION_NOT_FD) ?
-		ion_dma_buf_to_handle(display_iclient,
-			(struct dma_buf *)(img->memory_id)) :
-		ion_import_dma_buf(display_iclient, img->memory_id);
+	*srcp_ihdl = ion_import_dma_buf(display_iclient, mem_id);
 	if (IS_ERR_OR_NULL(*srcp_ihdl)) {
 		pr_err("ion_import_dma_buf() failed\n");
 		return PTR_ERR(*srcp_ihdl);
 	}
-
-	pr_debug("%s(): ion_hdl %p, ion_buf %d\n", __func__, *srcp_ihdl,
-		img->memory_id);
+	pr_debug("%s(): ion_hdl %p, ion_buf %d\n", __func__, *srcp_ihdl, mem_id);
 	pr_debug("mixer %u, pipe %u, plane %u\n", pipe->mixer_num,
 		pipe->pipe_ndx, plane);
 
