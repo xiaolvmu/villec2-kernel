@@ -14,6 +14,7 @@ Description: Contains API functions to be used by host to Initialize Yushan cloc
 
 #include "Yushan_API.h"
 #include <mach/gpio.h>
+#include <linux/gpio.h>
 
 #ifdef YUSHAN_API_DEBUG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
