@@ -468,6 +468,7 @@ struct msm_panel_common_pdata {
 	u32 mdp_bw_ib_factor;
 	u32 splash_screen_size;
 	u32 splash_screen_addr;
+	int (*mdp_gamma_cool)(void);
 
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *mdp_bus_scale_table;

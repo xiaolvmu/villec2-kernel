@@ -176,7 +176,7 @@ struct msm_panel_info {
 	__u32 is_3d_panel;
 	__u32 frame_rate;
 	__u32 frame_interval;
-#ifdef CONFIG_MACH_HTC
+#ifdef CONFIG_MACH_VILLEC2
 	__u32 width;
 	__u32 height;
 #endif
