@@ -4923,10 +4923,19 @@ static int __init hdmi_msm_init(void)
 
 	external_common_state = &hdmi_msm_state->common;
 
+	if (machine_is_apq8064_adp_2() ||
+		machine_is_apq8064_adp2_es2() ||
+		machine_is_apq8064_adp2_es2p5())
+		external_common_state->skip_edid = true;
+
 	if (hdmi_prim_display && hdmi_prim_resolution)
 		external_common_state->video_resolution =
 			hdmi_prim_resolution;
 	else {
+		if (machine_is_apq8064_mplatform())
+			external_common_state->video_resolution =
+				HDMI_VFRMT_1280x720p60_16_9;
+		else
 			external_common_state->video_resolution =
 				HDMI_RESOLUTION_DEFAULT;
 	}

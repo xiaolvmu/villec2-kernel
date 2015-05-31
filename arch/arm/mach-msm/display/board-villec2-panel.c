@@ -630,9 +630,22 @@ static int mipi_dsi_panel_power(const int on)
 			return -ENODEV;
 		}
 
+		if (!mipi_lcd_on) {
+			hr_msleep(10);
+			gpio_set_value(GPIO_LCM_RST_N, 1);
+			hr_msleep(1);
+			gpio_set_value(GPIO_LCM_RST_N, 0);
+			hr_msleep(35);
+			gpio_set_value(GPIO_LCM_RST_N, 1);
+		}
 		hr_msleep(60);
 		bPanelPowerOn = true;
 	} else {
+		PR_DISP_INFO("%s: off\n", __func__);
+		if (!bPanelPowerOn) return 0;
+		hr_msleep(100);
+		gpio_set_value(GPIO_LCM_RST_N, 0);
+		hr_msleep(10);
 
 		if (regulator_disable(v_lcm)) {
 			PR_DISP_ERR("%s: Unable to enable the regulator: %s\n", __func__, lcm_str);
