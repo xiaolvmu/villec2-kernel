@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,4 +27,25 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type);
 void __gpio_tlmm_config(unsigned config);
 void __msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 					unsigned int input_polarity);
+
+#ifdef CONFIG_GPIO_MSM_V2
+int _gpio_debug_direction_set(void *data, u64 val);
+int _gpio_debug_direction_get(void *data, u64 *val);
+int _gpio_debug_level_set(void *data, u64 val);
+int _gpio_debug_level_get(void *data, u64 *val);
+int _gpio_debug_drv_set(void *data, u64 val);
+int _gpio_debug_drv_get(void *data, u64 *val);
+int _gpio_debug_func_sel_set(void *data, u64 val);
+int _gpio_debug_func_sel_get(void *data, u64 *val);
+int _gpio_debug_pull_set(void *data, u64 val);
+int _gpio_debug_pull_get(void *data, u64 *val);
+int _gpio_debug_int_enable_get(void *data, u64 *val);
+int _gpio_debug_int_owner_set(void *data, u64 val);
+int _gpio_debug_int_owner_get(void *data, u64 *val);
+int _gpio_debug_int_type_get(void *data, u64 *val);
+int msm_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer);
+#else
+int msm_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer) {}
+#endif 
+
 #endif

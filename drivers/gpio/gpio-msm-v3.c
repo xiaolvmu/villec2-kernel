@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -47,14 +47,9 @@ enum {
 	INTR_ENABLE_BIT        = 0,
 	INTR_POL_CTL_BIT       = 1,
 	INTR_DECT_CTL_BIT      = 2,
-	INTR_RAW_STATUS_EN_BIT = 3,
-};
-
-/* Codes of interest in GPIO_INTR_CFG_SU.
- */
-enum {
-	TARGET_PROC_SCORPION = 4,
-	TARGET_PROC_NONE     = 7,
+	INTR_RAW_STATUS_EN_BIT = 4,
+	INTR_TARGET_PROC_BIT   = 5,
+	INTR_DIR_CONN_EN_BIT   = 8,
 };
 
 /*
@@ -63,8 +58,8 @@ enum {
  * the registers allow for low-polarity inputs, the case can never arise.
  */
 enum {
-	DC_POLARITY_HI	= BIT(11),
-	DC_IRQ_ENABLE	= BIT(3),
+	DC_GPIO_SEL_BIT = 0,
+	DC_POLARITY_BIT	= 8,
 };
 
 /*
@@ -81,15 +76,24 @@ enum {
  */
 #define INTR_RAW_STATUS_EN BIT(INTR_RAW_STATUS_EN_BIT)
 #define INTR_ENABLE        BIT(INTR_ENABLE_BIT)
-#define INTR_DECT_CTL_EDGE BIT(INTR_DECT_CTL_BIT)
 #define INTR_POL_CTL_HI    BIT(INTR_POL_CTL_BIT)
+#define INTR_DIR_CONN_EN   BIT(INTR_DIR_CONN_EN_BIT)
+#define DC_POLARITY_HI     BIT(DC_POLARITY_BIT)
 
-#define GPIO_INTR_CFG_SU(gpio)    (MSM_TLMM_BASE + 0x0400 + (0x04 * (gpio)))
-#define DIR_CONN_INTR_CFG_SU(irq) (MSM_TLMM_BASE + 0x0700 + (0x04 * (irq)))
-#define GPIO_CONFIG(gpio)         (MSM_TLMM_BASE + 0x1000 + (0x10 * (gpio)))
-#define GPIO_IN_OUT(gpio)         (MSM_TLMM_BASE + 0x1004 + (0x10 * (gpio)))
-#define GPIO_INTR_CFG(gpio)       (MSM_TLMM_BASE + 0x1008 + (0x10 * (gpio)))
-#define GPIO_INTR_STATUS(gpio)    (MSM_TLMM_BASE + 0x100c + (0x10 * (gpio)))
+#define INTR_TARGET_PROC_APPS    (4 << INTR_TARGET_PROC_BIT)
+#define INTR_TARGET_PROC_NONE    (7 << INTR_TARGET_PROC_BIT)
+
+#define INTR_DECT_CTL_LEVEL      (0 << INTR_DECT_CTL_BIT)
+#define INTR_DECT_CTL_POS_EDGE   (1 << INTR_DECT_CTL_BIT)
+#define INTR_DECT_CTL_NEG_EDGE   (2 << INTR_DECT_CTL_BIT)
+#define INTR_DECT_CTL_DUAL_EDGE  (3 << INTR_DECT_CTL_BIT)
+#define INTR_DECT_CTL_MASK       (3 << INTR_DECT_CTL_BIT)
+
+#define GPIO_CONFIG(gpio)        (MSM_TLMM_BASE + 0x1000 + (0x10 * (gpio)))
+#define GPIO_IN_OUT(gpio)        (MSM_TLMM_BASE + 0x1004 + (0x10 * (gpio)))
+#define GPIO_INTR_CFG(gpio)      (MSM_TLMM_BASE + 0x1008 + (0x10 * (gpio)))
+#define GPIO_INTR_STATUS(gpio)   (MSM_TLMM_BASE + 0x100c + (0x10 * (gpio)))
+#define GPIO_DIR_CONN_INTR(intr) (MSM_TLMM_BASE + 0x2800 + (0x04 * (intr)))
 
 static inline void set_gpio_bits(unsigned n, void __iomem *reg)
 {
@@ -113,9 +117,9 @@ void __msm_gpio_set_inout(unsigned gpio, unsigned val)
 
 void __msm_gpio_set_config_direction(unsigned gpio, int input, int val)
 {
-	if (input)
+	if (input) {
 		clr_gpio_bits(BIT(GPIO_OE_BIT), GPIO_CONFIG(gpio));
-	else {
+	} else {
 		__msm_gpio_set_inout(gpio, val);
 		set_gpio_bits(BIT(GPIO_OE_BIT), GPIO_CONFIG(gpio));
 	}
@@ -137,7 +141,7 @@ unsigned __msm_gpio_get_intr_status(unsigned gpio)
 
 void __msm_gpio_set_intr_status(unsigned gpio)
 {
-	__raw_writel(BIT(INTR_STATUS_BIT), GPIO_INTR_STATUS(gpio));
+	__raw_writel(0, GPIO_INTR_STATUS(gpio));
 }
 
 unsigned __msm_gpio_get_intr_config(unsigned gpio)
@@ -147,12 +151,16 @@ unsigned __msm_gpio_get_intr_config(unsigned gpio)
 
 void __msm_gpio_set_intr_cfg_enable(unsigned gpio, unsigned val)
 {
-	if (val) {
-		set_gpio_bits(INTR_ENABLE, GPIO_INTR_CFG(gpio));
+	unsigned cfg;
 
+	cfg = __raw_readl(GPIO_INTR_CFG(gpio));
+	if (val) {
+		cfg &= ~INTR_DIR_CONN_EN;
+		cfg |= INTR_ENABLE;
 	} else {
-		clr_gpio_bits(INTR_ENABLE, GPIO_INTR_CFG(gpio));
+		cfg &= ~INTR_ENABLE;
 	}
+	__raw_writel(cfg, GPIO_INTR_CFG(gpio));
 }
 
 unsigned  __msm_gpio_get_intr_cfg_enable(unsigned gpio)
@@ -168,21 +176,22 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type)
 	 * internal circuitry of TLMM, toggling the RAW_STATUS
 	 * could cause the INTR_STATUS to be set for EDGE interrupts.
 	 */
-	cfg  = __msm_gpio_get_intr_config(gpio);
-	cfg |= INTR_RAW_STATUS_EN;
+	cfg = INTR_RAW_STATUS_EN | INTR_TARGET_PROC_APPS;
 	__raw_writel(cfg, GPIO_INTR_CFG(gpio));
-	__raw_writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(gpio));
-
-	cfg  = __msm_gpio_get_intr_config(gpio);
-	if (type & IRQ_TYPE_EDGE_BOTH)
-		cfg |= INTR_DECT_CTL_EDGE;
+	cfg &= ~INTR_DECT_CTL_MASK;
+	if (type == IRQ_TYPE_EDGE_RISING)
+		cfg |= INTR_DECT_CTL_POS_EDGE;
+	else if (type == IRQ_TYPE_EDGE_FALLING)
+		cfg |= INTR_DECT_CTL_NEG_EDGE;
+	else if (type == IRQ_TYPE_EDGE_BOTH)
+		cfg |= INTR_DECT_CTL_DUAL_EDGE;
 	else
-		cfg &= ~INTR_DECT_CTL_EDGE;
+		cfg |= INTR_DECT_CTL_LEVEL;
 
-	if (type & (IRQ_TYPE_EDGE_RISING | IRQ_TYPE_LEVEL_HIGH))
-		cfg |= INTR_POL_CTL_HI;
-	else
+	if (type & IRQ_TYPE_LEVEL_LOW)
 		cfg &= ~INTR_POL_CTL_HI;
+	else
+		cfg |= INTR_POL_CTL_HI;
 
 	__raw_writel(cfg, GPIO_INTR_CFG(gpio));
 	/* Sometimes it might take a little while to update
@@ -195,7 +204,7 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type)
 
 void __gpio_tlmm_config(unsigned config)
 {
-	uint32_t flags;
+	unsigned flags;
 	unsigned gpio = GPIO_PIN(config);
 
 	flags = ((GPIO_DIR(config) << 9) & (0x1 << 9)) |
@@ -208,18 +217,16 @@ void __gpio_tlmm_config(unsigned config)
 void __msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 					unsigned int input_polarity)
 {
-	uint32_t bits;
+	unsigned cfg;
 
-	__raw_writel(__raw_readl(GPIO_CONFIG(gpio)) | BIT(GPIO_OE_BIT),
-		GPIO_CONFIG(gpio));
-	__raw_writel(__raw_readl(GPIO_INTR_CFG(gpio)) &
-		~(INTR_RAW_STATUS_EN | INTR_ENABLE),
-		GPIO_INTR_CFG(gpio));
-	__raw_writel(DC_IRQ_ENABLE | TARGET_PROC_NONE,
-		GPIO_INTR_CFG_SU(gpio));
+	set_gpio_bits(BIT(GPIO_OE_BIT), GPIO_CONFIG(gpio));
+	cfg = __raw_readl(GPIO_INTR_CFG(gpio));
+	cfg &= ~(INTR_TARGET_PROC_NONE | INTR_RAW_STATUS_EN | INTR_ENABLE);
+	cfg |= INTR_TARGET_PROC_APPS | INTR_DIR_CONN_EN;
+	__raw_writel(cfg, GPIO_INTR_CFG(gpio));
 
-	bits = TARGET_PROC_SCORPION | (gpio << 3);
+	cfg = gpio;
 	if (input_polarity)
-		bits |= DC_POLARITY_HI;
-	__raw_writel(bits, DIR_CONN_INTR_CFG_SU(irq));
+		cfg |= DC_POLARITY_HI;
+	__raw_writel(cfg, GPIO_DIR_CONN_INTR(irq));
 }

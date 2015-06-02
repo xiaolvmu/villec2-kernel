@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,31 +18,24 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 
+
 #include <mach/msm_iomap.h>
 #include <mach/gpiomux.h>
 #include "gpio-msm-common.h"
 
-/* Bits of interest in the GPIO_IN_OUT register.
- */
 enum {
 	GPIO_IN_BIT  = 0,
 	GPIO_OUT_BIT = 1
 };
 
-/* Bits of interest in the GPIO_INTR_STATUS register.
- */
 enum {
 	INTR_STATUS_BIT = 0,
 };
 
-/* Bits of interest in the GPIO_CFG register.
- */
 enum {
 	GPIO_OE_BIT = 9,
 };
 
-/* Bits of interest in the GPIO_INTR_CFG register.
- */
 enum {
 	INTR_ENABLE_BIT        = 0,
 	INTR_POL_CTL_BIT       = 1,
@@ -50,35 +43,16 @@ enum {
 	INTR_RAW_STATUS_EN_BIT = 3,
 };
 
-/* Codes of interest in GPIO_INTR_CFG_SU.
- */
 enum {
 	TARGET_PROC_SCORPION = 4,
 	TARGET_PROC_NONE     = 7,
 };
 
-/*
- * There is no 'DC_POLARITY_LO' because the GIC is incapable
- * of asserting on falling edge or level-low conditions.  Even though
- * the registers allow for low-polarity inputs, the case can never arise.
- */
 enum {
 	DC_POLARITY_HI	= BIT(11),
 	DC_IRQ_ENABLE	= BIT(3),
 };
 
-/*
- * When a GPIO triggers, two separate decisions are made, controlled
- * by two separate flags.
- *
- * - First, INTR_RAW_STATUS_EN controls whether or not the GPIO_INTR_STATUS
- * register for that GPIO will be updated to reflect the triggering of that
- * gpio.  If this bit is 0, this register will not be updated.
- * - Second, INTR_ENABLE controls whether an interrupt is triggered.
- *
- * If INTR_ENABLE is set and INTR_RAW_STATUS_EN is NOT set, an interrupt
- * can be triggered but the status register will not reflect it.
- */
 #define INTR_RAW_STATUS_EN BIT(INTR_RAW_STATUS_EN_BIT)
 #define INTR_ENABLE        BIT(INTR_ENABLE_BIT)
 #define INTR_DECT_CTL_EDGE BIT(INTR_DECT_CTL_BIT)
@@ -157,17 +131,13 @@ void __msm_gpio_set_intr_cfg_enable(unsigned gpio, unsigned val)
 
 unsigned  __msm_gpio_get_intr_cfg_enable(unsigned gpio)
 {
-	return __msm_gpio_get_intr_config(gpio) & INTR_ENABLE;
+	return 	__msm_gpio_get_intr_config(gpio) & INTR_ENABLE;
 }
 
 void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type)
 {
 	unsigned cfg;
 
-	/* RAW_STATUS_EN is left on for all gpio irqs. Due to the
-	 * internal circuitry of TLMM, toggling the RAW_STATUS
-	 * could cause the INTR_STATUS to be set for EDGE interrupts.
-	 */
 	cfg  = __msm_gpio_get_intr_config(gpio);
 	cfg |= INTR_RAW_STATUS_EN;
 	__raw_writel(cfg, GPIO_INTR_CFG(gpio));
@@ -185,11 +155,6 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type)
 		cfg &= ~INTR_POL_CTL_HI;
 
 	__raw_writel(cfg, GPIO_INTR_CFG(gpio));
-	/* Sometimes it might take a little while to update
-	 * the interrupt status after the RAW_STATUS is enabled
-	 * We clear the interrupt status before enabling the
-	 * interrupt in the unmask call-back.
-	 */
 	udelay(5);
 }
 
@@ -223,3 +188,145 @@ void __msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 		bits |= DC_POLARITY_HI;
 	__raw_writel(bits, DIR_CONN_INTR_CFG_SU(irq));
 }
+
+#if defined(CONFIG_DEBUG_FS)
+#define GPIO_FUNC_SEL_BIT 2
+#define GPIO_DRV_BIT 6
+
+int _gpio_debug_direction_set(void *data, u64 val)
+{
+	int *id = data;
+
+	if (val)
+		clr_gpio_bits(BIT(GPIO_OE_BIT), GPIO_CONFIG(*id));
+	else
+		set_gpio_bits(BIT(GPIO_OE_BIT), GPIO_CONFIG(*id));
+
+	return 0;
+}
+
+int _gpio_debug_direction_get(void *data, u64 *val)
+{
+	int *id = data;
+
+	*val = ((readl(GPIO_CONFIG(*id)) & BIT(GPIO_OE_BIT))>>GPIO_OE_BIT)? 0 : 1;
+
+	return 0;
+}
+
+int _gpio_debug_level_set(void *data, u64 val)
+{
+	int *id = data;
+
+	writel(val ? BIT(GPIO_OUT_BIT) : 0, GPIO_IN_OUT(*id));
+
+	return 0;
+}
+
+int _gpio_debug_level_get(void *data, u64 *val)
+{
+	int *id = data;
+	int dir = (readl(GPIO_CONFIG(*id)) & BIT(GPIO_OE_BIT))>>GPIO_OE_BIT;
+
+	if (dir)
+		*val = (readl(GPIO_IN_OUT(*id)) & BIT(GPIO_OUT_BIT))>>GPIO_OUT_BIT;
+	else
+		*val = readl(GPIO_IN_OUT(*id)) & BIT(GPIO_IN_BIT);
+
+	return 0;
+}
+
+int _gpio_debug_drv_set(void *data, u64 val)
+{
+	int *id = data;
+
+	set_gpio_bits((val << GPIO_DRV_BIT), GPIO_CONFIG(*id));
+
+	return 0;
+}
+
+int _gpio_debug_drv_get(void *data, u64 *val)
+{
+	int *id = data;
+
+	*val = (readl(GPIO_CONFIG(*id)) >> GPIO_DRV_BIT) & 0x7;
+
+	return 0;
+}
+
+int _gpio_debug_func_sel_set(void *data, u64 val)
+{
+	int *id = data;
+
+	set_gpio_bits((val << GPIO_FUNC_SEL_BIT), GPIO_CONFIG(*id));
+
+	return 0;
+}
+
+int _gpio_debug_func_sel_get(void *data, u64 *val)
+{
+	int *id = data;
+
+	*val = (readl(GPIO_CONFIG(*id)) >> GPIO_FUNC_SEL_BIT) & 0x7;
+
+	return 0;
+}
+
+int _gpio_debug_pull_set(void *data, u64 val)
+{
+	int *id = data;
+
+	set_gpio_bits(val, GPIO_CONFIG(*id));
+
+	return 0;
+}
+
+int _gpio_debug_pull_get(void *data, u64 *val)
+{
+	int *id = data;
+
+	*val = readl(GPIO_CONFIG(*id)) & 0x3;
+
+	return 0;
+}
+
+int _gpio_debug_int_enable_get(void *data, u64 *val)
+{
+	int *id = data;
+
+	*val = readl(GPIO_INTR_CFG(*id)) & 0x1;
+
+	return 0;
+}
+
+int _gpio_debug_int_owner_set(void *data, u64 val)
+{
+	int *id = data;
+
+	if (val)
+		writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(*id));
+	else
+		writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(*id));
+
+	return 0;
+}
+
+int _gpio_debug_int_owner_get(void *data, u64 *val)
+{
+	int *id = data;
+
+	*val = readl(GPIO_INTR_CFG_SU(*id)) & 0x7;
+
+	return 0;
+}
+
+int _gpio_debug_int_type_get(void *data, u64 *val)
+{
+	int *id = data;
+
+	*val = (readl(GPIO_INTR_CFG(*id))>>0x1) & 0x3;
+
+	return 0;
+}
+
+#endif

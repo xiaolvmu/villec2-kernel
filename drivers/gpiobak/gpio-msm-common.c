@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,7 +23,6 @@
 #include <linux/irqdomain.h>
 #include <linux/of.h>
 #include <linux/err.h>
-#include <linux/platform_device.h>
 
 #include <asm/mach/irq.h>
 
@@ -32,10 +31,22 @@
 #include <mach/mpm.h>
 #include "gpio-msm-common.h"
 
+#ifdef CONFIG_GPIO_MSM_V2
+#include <linux/debugfs.h>
+#include <linux/seq_file.h>
+#include <linux/slab.h>
+#include <linux/mfd/pm8xxx/pm8921.h>
+#include "../../arch/arm/mach-msm/pm.h"
+#endif 
+
+#if defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_APQ8064)
+#define GPIO_PM_USR_INTz       (104)
+#endif
+
 #ifdef CONFIG_GPIO_MSM_V3
 enum msm_tlmm_register {
-	SDC4_HDRV_PULL_CTL = 0x0, /* NOT USED */
-	SDC3_HDRV_PULL_CTL = 0x0, /* NOT USED */
+	SDC4_HDRV_PULL_CTL = 0x0, 
+	SDC3_HDRV_PULL_CTL = 0x0, 
 	SDC2_HDRV_PULL_CTL = 0x2048,
 	SDC1_HDRV_PULL_CTL = 0x2044,
 };
@@ -43,7 +54,7 @@ enum msm_tlmm_register {
 enum msm_tlmm_register {
 	SDC4_HDRV_PULL_CTL = 0x20a0,
 	SDC3_HDRV_PULL_CTL = 0x20a4,
-	SDC2_HDRV_PULL_CTL = 0x0, /* NOT USED */
+	SDC2_HDRV_PULL_CTL = 0x0, 
 	SDC1_HDRV_PULL_CTL = 0x20a0,
 };
 #endif
@@ -54,39 +65,35 @@ struct tlmm_field_cfg {
 };
 
 static const struct tlmm_field_cfg tlmm_hdrv_cfgs[] = {
-	{SDC4_HDRV_PULL_CTL, 6}, /* TLMM_HDRV_SDC4_CLK  */
-	{SDC4_HDRV_PULL_CTL, 3}, /* TLMM_HDRV_SDC4_CMD  */
-	{SDC4_HDRV_PULL_CTL, 0}, /* TLMM_HDRV_SDC4_DATA */
-	{SDC3_HDRV_PULL_CTL, 6}, /* TLMM_HDRV_SDC3_CLK  */
-	{SDC3_HDRV_PULL_CTL, 3}, /* TLMM_HDRV_SDC3_CMD  */
-	{SDC3_HDRV_PULL_CTL, 0}, /* TLMM_HDRV_SDC3_DATA */
-	{SDC2_HDRV_PULL_CTL, 6}, /* TLMM_HDRV_SDC2_CLK  */
-	{SDC2_HDRV_PULL_CTL, 3}, /* TLMM_HDRV_SDC2_CMD  */
-	{SDC2_HDRV_PULL_CTL, 0}, /* TLMM_HDRV_SDC2_DATA */
-	{SDC1_HDRV_PULL_CTL, 6}, /* TLMM_HDRV_SDC1_CLK  */
-	{SDC1_HDRV_PULL_CTL, 3}, /* TLMM_HDRV_SDC1_CMD  */
-	{SDC1_HDRV_PULL_CTL, 0}, /* TLMM_HDRV_SDC1_DATA */
+	{SDC4_HDRV_PULL_CTL, 6}, 
+	{SDC4_HDRV_PULL_CTL, 3}, 
+	{SDC4_HDRV_PULL_CTL, 0}, 
+	{SDC3_HDRV_PULL_CTL, 6}, 
+	{SDC3_HDRV_PULL_CTL, 3}, 
+	{SDC3_HDRV_PULL_CTL, 0}, 
+	{SDC2_HDRV_PULL_CTL, 6}, 
+	{SDC2_HDRV_PULL_CTL, 3}, 
+	{SDC2_HDRV_PULL_CTL, 0}, 
+	{SDC1_HDRV_PULL_CTL, 6}, 
+	{SDC1_HDRV_PULL_CTL, 3}, 
+	{SDC1_HDRV_PULL_CTL, 0}, 
 };
 
 static const struct tlmm_field_cfg tlmm_pull_cfgs[] = {
-	{SDC4_HDRV_PULL_CTL, 14}, /* TLMM_PULL_SDC4_CLK */
-	{SDC4_HDRV_PULL_CTL, 11}, /* TLMM_PULL_SDC4_CMD  */
-	{SDC4_HDRV_PULL_CTL, 9},  /* TLMM_PULL_SDC4_DATA */
-	{SDC3_HDRV_PULL_CTL, 14}, /* TLMM_PULL_SDC3_CLK  */
-	{SDC3_HDRV_PULL_CTL, 11}, /* TLMM_PULL_SDC3_CMD  */
-	{SDC3_HDRV_PULL_CTL, 9},  /* TLMM_PULL_SDC3_DATA */
-	{SDC2_HDRV_PULL_CTL, 14}, /* TLMM_PULL_SDC2_CLK  */
-	{SDC2_HDRV_PULL_CTL, 11}, /* TLMM_PULL_SDC2_CMD  */
-	{SDC2_HDRV_PULL_CTL, 9},  /* TLMM_PULL_SDC2_DATA */
-	{SDC1_HDRV_PULL_CTL, 13}, /* TLMM_PULL_SDC1_CLK  */
-	{SDC1_HDRV_PULL_CTL, 11}, /* TLMM_PULL_SDC1_CMD  */
-	{SDC1_HDRV_PULL_CTL, 9},  /* TLMM_PULL_SDC1_DATA */
+	{SDC4_HDRV_PULL_CTL, 14}, 
+	{SDC4_HDRV_PULL_CTL, 11}, 
+	{SDC4_HDRV_PULL_CTL, 9},  
+	{SDC3_HDRV_PULL_CTL, 14}, 
+	{SDC3_HDRV_PULL_CTL, 11}, 
+	{SDC3_HDRV_PULL_CTL, 9},  
+	{SDC2_HDRV_PULL_CTL, 14}, 
+	{SDC2_HDRV_PULL_CTL, 11}, 
+	{SDC2_HDRV_PULL_CTL, 9},  
+	{SDC1_HDRV_PULL_CTL, 13}, 
+	{SDC1_HDRV_PULL_CTL, 11}, 
+	{SDC1_HDRV_PULL_CTL, 9},  
 };
 
-/*
- * Supported arch specific irq extension.
- * Default make them NULL.
- */
 struct irq_chip msm_gpio_irq_extn = {
 	.irq_eoi	= NULL,
 	.irq_mask	= NULL,
@@ -97,22 +104,6 @@ struct irq_chip msm_gpio_irq_extn = {
 	.irq_disable	= NULL,
 };
 
-/**
- * struct msm_gpio_dev: the MSM8660 SoC GPIO device structure
- *
- * @enabled_irqs: a bitmap used to optimize the summary-irq handler.  By
- * keeping track of which gpios are unmasked as irq sources, we avoid
- * having to do __raw_readl calls on hundreds of iomapped registers each time
- * the summary interrupt fires in order to locate the active interrupts.
- *
- * @wake_irqs: a bitmap for tracking which interrupt lines are enabled
- * as wakeup sources.  When the device is suspended, interrupts which are
- * not wakeup sources are disabled.
- *
- * @dual_edge_irqs: a bitmap used to track which irqs are configured
- * as dual-edge, as this is not supported by the hardware and requires
- * some special handling in the driver.
- */
 struct msm_gpio_dev {
 	struct gpio_chip gpio_chip;
 	DECLARE_BITMAP(enabled_irqs, NR_MSM_GPIOS);
@@ -218,7 +209,7 @@ static struct msm_gpio_dev msm_gpio = {
 
 static void switch_mpm_config(struct irq_data *d, unsigned val)
 {
-	/* switch the configuration in the mpm as well */
+	
 	if (!msm_gpio_irq_extn.irq_set_type)
 		return;
 
@@ -228,26 +219,6 @@ static void switch_mpm_config(struct irq_data *d, unsigned val)
 		msm_gpio_irq_extn.irq_set_type(d, IRQF_TRIGGER_RISING);
 }
 
-/* For dual-edge interrupts in software, since the hardware has no
- * such support:
- *
- * At appropriate moments, this function may be called to flip the polarity
- * settings of both-edge irq lines to try and catch the next edge.
- *
- * The attempt is considered successful if:
- * - the status bit goes high, indicating that an edge was caught, or
- * - the input value of the gpio doesn't change during the attempt.
- * If the value changes twice during the process, that would cause the first
- * test to fail but would force the second, as two opposite
- * transitions would cause a detection no matter the polarity setting.
- *
- * The do-loop tries to sledge-hammer closed the timing hole between
- * the initial value-read and the polarity-write - if the line value changes
- * during that window, an interrupt is lost, the new polarity setting is
- * incorrect, and the first success test will fail, causing a retry.
- *
- * Algorithm comes from Google's msmgpio driver, see mach-msm/gpio.c.
- */
 static void msm_gpio_update_dual_edge_pos(struct irq_data *d, unsigned gpio)
 {
 	int loop_limit = 100;
@@ -343,20 +314,12 @@ static int msm_gpio_irq_set_type(struct irq_data *d, unsigned int flow_type)
 	mb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 
-	if ((flow_type & IRQ_TYPE_EDGE_BOTH) != IRQ_TYPE_EDGE_BOTH) {
-		if (msm_gpio_irq_extn.irq_set_type)
-			msm_gpio_irq_extn.irq_set_type(d, flow_type);
-	}
+	if (msm_gpio_irq_extn.irq_set_type)
+		msm_gpio_irq_extn.irq_set_type(d, flow_type);
 
 	return 0;
 }
 
-/*
- * When the summary IRQ is raised, any number of GPIO lines may be high.
- * It is the job of the summary handler to find all those GPIO lines
- * which have been set as summary IRQ lines and which are triggered,
- * and to call their interrupt handlers.
- */
 static irqreturn_t msm_summary_irq_handler(int irq, void *data)
 {
 	unsigned long i;
@@ -407,6 +370,54 @@ static struct irq_chip msm_gpio_irq_chip = {
 	.irq_disable	= msm_gpio_irq_disable,
 };
 
+static struct lock_class_key msm_gpio_lock_class;
+
+static int __devinit msm_gpio_probe(void)
+{
+	int ret;
+#ifndef CONFIG_OF
+	int irq, i;
+#endif
+
+	spin_lock_init(&tlmm_lock);
+	bitmap_zero(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
+	bitmap_zero(msm_gpio.wake_irqs, NR_MSM_GPIOS);
+	bitmap_zero(msm_gpio.dual_edge_irqs, NR_MSM_GPIOS);
+	ret = gpiochip_add(&msm_gpio.gpio_chip);
+	if (ret < 0)
+		return ret;
+
+#ifndef CONFIG_OF
+	for (i = 0; i < msm_gpio.gpio_chip.ngpio; ++i) {
+		irq = msm_gpio_to_irq(&msm_gpio.gpio_chip, i);
+		irq_set_lockdep_class(irq, &msm_gpio_lock_class);
+		irq_set_chip_and_handler(irq, &msm_gpio_irq_chip,
+					 handle_level_irq);
+		set_irq_flags(irq, IRQF_VALID);
+	}
+#endif
+	ret = request_irq(TLMM_MSM_SUMMARY_IRQ, msm_summary_irq_handler,
+			IRQF_TRIGGER_HIGH, "msmgpio", NULL);
+	if (ret) {
+		pr_err("Request_irq failed for TLMM_MSM_SUMMARY_IRQ - %d\n",
+				ret);
+		return ret;
+	}
+	return 0;
+}
+
+static int __devexit msm_gpio_remove(void)
+{
+	int ret = gpiochip_remove(&msm_gpio.gpio_chip);
+
+	if (ret < 0)
+		return ret;
+
+	irq_set_handler(TLMM_MSM_SUMMARY_IRQ, NULL);
+
+	return 0;
+}
+
 #ifdef CONFIG_PM
 static int msm_gpio_suspend(void)
 {
@@ -437,8 +448,14 @@ void msm_gpio_show_resume_irq(void)
 		intstat = __msm_gpio_get_intr_status(i);
 		if (intstat) {
 			irq = msm_gpio_to_irq(&msm_gpio.gpio_chip, i);
-			pr_warning("%s: %d triggered\n",
-				__func__, irq);
+			pr_warning("%s: %d triggered\n", __func__, irq);
+#if defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_APQ8064)
+			if(irq != GPIO_PM_USR_INTz + NR_MSM_IRQS) {
+#endif
+				pr_warning("[K][WAKEUP] Resume caused by msmgpio-%d\n", irq - NR_MSM_IRQS);
+#if defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_APQ8064)
+			}
+#endif
 		}
 	}
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
@@ -469,6 +486,381 @@ static struct syscore_ops msm_gpio_syscore_ops = {
 	.suspend = msm_gpio_suspend,
 	.resume = msm_gpio_resume,
 };
+
+#ifdef CONFIG_GPIO_MSM_V2
+#define GPIO_FUNC_SEL_BIT 2
+#define GPIO_DRV_BIT 6
+
+#if defined(CONFIG_DEBUG_FS)
+
+static int gpio_debug_direction_set(void *data, u64 val)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	_gpio_debug_direction_set(data, val);
+	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
+	return 0;
+}
+
+static int gpio_debug_direction_get(void *data, u64 *val)
+{
+	return _gpio_debug_direction_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_direction_fops, gpio_debug_direction_get,
+			gpio_debug_direction_set, "%llu\n");
+
+static int gpio_debug_level_set(void *data, u64 val)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	_gpio_debug_level_set(data, val);
+	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
+	return 0;
+}
+
+static int gpio_debug_level_get(void *data, u64 *val)
+{
+	return _gpio_debug_level_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_level_fops, gpio_debug_level_get,
+			gpio_debug_level_set, "%llu\n");
+
+static int gpio_debug_drv_set(void *data, u64 val)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	_gpio_debug_drv_set(data, val);
+	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
+	return 0;
+}
+
+static int gpio_debug_drv_get(void *data, u64 *val)
+{
+	return _gpio_debug_drv_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_drv_fops, gpio_debug_drv_get,
+			gpio_debug_drv_set, "%llu\n");
+
+static int gpio_debug_func_sel_set(void *data, u64 val)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	_gpio_debug_func_sel_set(data, val);
+	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
+	return 0;
+}
+
+static int gpio_debug_func_sel_get(void *data, u64 *val)
+{
+	return _gpio_debug_func_sel_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_func_sel_fops, gpio_debug_func_sel_get,
+			gpio_debug_func_sel_set, "%llu\n");
+
+static int gpio_debug_pull_set(void *data, u64 val)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	_gpio_debug_pull_set(data, val);
+	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
+	return 0;
+}
+
+static int gpio_debug_pull_get(void *data, u64 *val)
+{
+	return _gpio_debug_pull_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_pull_fops, gpio_debug_pull_get,
+			gpio_debug_pull_set, "%llu\n");
+
+static int gpio_debug_int_enable_get(void *data, u64 *val)
+{
+	return _gpio_debug_int_enable_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_int_enable_fops, gpio_debug_int_enable_get,
+			NULL, "%llu\n");
+
+static int gpio_debug_int_owner_set(void *data, u64 val)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	_gpio_debug_int_owner_set(data, val);
+	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
+	return 0;
+}
+
+static int gpio_debug_int_owner_get(void *data, u64 *val)
+{
+	return _gpio_debug_int_owner_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_int_owner_fops, gpio_debug_int_owner_get,
+			gpio_debug_int_owner_set, "%llu\n");
+
+static int gpio_debug_int_type_get(void *data, u64 *val)
+{
+	return _gpio_debug_int_type_get(data, val);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_int_type_fops, gpio_debug_int_type_get,
+			NULL, "%llu\n");
+
+static int list_gpios_show(struct seq_file *m, void *unused)
+{
+	msm_dump_gpios(m, 0, NULL);
+	pm8xxx_dump_gpios(m, 0, NULL);
+	pm8xxx_dump_mpp(m, 0, NULL);
+	return 0;
+}
+
+static int list_sleep_gpios_show(struct seq_file *m, void *unused)
+{
+	print_gpio_buffer(m);
+	return 0;
+}
+
+static int list_gpios_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, list_gpios_show, inode->i_private);
+}
+
+static int list_sleep_gpios_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, list_sleep_gpios_show, inode->i_private);
+}
+
+static int list_sleep_gpios_release(struct inode *inode, struct file *file)
+{
+	free_gpio_buffer();
+	return single_release(inode, file);
+}
+
+static const struct file_operations list_gpios_fops = {
+	.open		= list_gpios_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
+};
+
+static const struct file_operations list_sleep_gpios_fops = {
+	.open		= list_sleep_gpios_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= list_sleep_gpios_release,
+};
+
+static struct dentry *debugfs_base;
+#define DEBUG_MAX_FNAME    8
+
+static int gpio_add_status(int id)
+{
+	unsigned int *index_p;
+	struct dentry *gpio_dir;
+	char name[DEBUG_MAX_FNAME];
+
+	index_p = kzalloc(sizeof(*index_p), GFP_KERNEL);
+	if (!index_p)
+		return -ENOMEM;
+	*index_p = id;
+	snprintf(name, DEBUG_MAX_FNAME-1, "%d", *index_p);
+
+	gpio_dir = debugfs_create_dir(name, debugfs_base);
+	if (!gpio_dir)
+		return -ENOMEM;
+
+	if (!debugfs_create_file("direction", S_IRUGO | S_IWUSR, gpio_dir,
+				index_p, &gpio_direction_fops))
+		goto error;
+
+	if (!debugfs_create_file("level", S_IRUGO | S_IWUSR, gpio_dir,
+				index_p, &gpio_level_fops))
+		goto error;
+
+	if (!debugfs_create_file("drv_strength", S_IRUGO | S_IWUSR, gpio_dir,
+				index_p, &gpio_drv_fops))
+		goto error;
+
+	if (!debugfs_create_file("func_sel", S_IRUGO | S_IWUSR, gpio_dir,
+				index_p, &gpio_func_sel_fops))
+		goto error;
+
+	if (!debugfs_create_file("pull", S_IRUGO | S_IWUSR, gpio_dir,
+				index_p, &gpio_pull_fops))
+		goto error;
+
+	if (!debugfs_create_file("int_enable", S_IRUGO, gpio_dir,
+				index_p, &gpio_int_enable_fops))
+		goto error;
+
+	if (!debugfs_create_file("int_owner", S_IRUGO | S_IWUSR, gpio_dir,
+				index_p, &gpio_int_owner_fops))
+		goto error;
+
+	if (!debugfs_create_file("int_type", S_IRUGO, gpio_dir,
+				index_p, &gpio_int_type_fops))
+		goto error;
+
+	return 0;
+error:
+	debugfs_remove_recursive(gpio_dir);
+	return -ENOMEM;
+}
+
+int __init gpio_status_debug_init(void)
+{
+	int i;
+	int err = 0;
+
+	debugfs_base = debugfs_create_dir("htc_gpio", NULL);
+	if (!debugfs_base)
+		return -ENOMEM;
+
+	if (!debugfs_create_file("list_gpios", S_IRUGO, debugfs_base,
+				&msm_gpio.gpio_chip, &list_gpios_fops))
+		return -ENOMEM;
+
+	if (!debugfs_create_file("list_sleep_gpios", S_IRUGO, debugfs_base,
+				&msm_gpio.gpio_chip, &list_sleep_gpios_fops))
+		return -ENOMEM;
+
+	for (i = msm_gpio.gpio_chip.base; i < msm_gpio.gpio_chip.ngpio; i++)
+		err = gpio_add_status(i);
+
+	return err;
+}
+#endif 
+
+int msm_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer)
+{
+	unsigned int i, len;
+	char list_gpio[100];
+	char *title_msg = "------------ MSM GPIO -------------";
+	u64 func_sel, dir, pull, drv, value, int_en, int_owner;
+
+	if (m) {
+		seq_printf(m, "%s\n", title_msg);
+	} else {
+		pr_info("[K] %s\n", title_msg);
+		curr_len += sprintf(gpio_buffer + curr_len,
+		"%s\n", title_msg);
+	}
+
+	for (i = msm_gpio.gpio_chip.base; i < msm_gpio.gpio_chip.ngpio; i++) {
+		memset(list_gpio, 0 , sizeof(list_gpio));
+		len = 0;
+
+		len += sprintf(list_gpio + len, "GPIO[%3d]: ", i);
+
+		_gpio_debug_func_sel_get((void *)&i, &func_sel);
+		len += sprintf(list_gpio + len, "[FS]0x%x, ", (unsigned int)func_sel);
+
+		_gpio_debug_direction_get((void *)&i, &dir);
+		_gpio_debug_level_get((void *)&i, &value);
+		if (dir)
+				len += sprintf(list_gpio + len, "[DIR] IN, [VAL]%s, ", value ? "HIGH" : " LOW");
+		else
+				len += sprintf(list_gpio + len, "[DIR]OUT, [VAL]%s, ", value ? "HIGH" : " LOW");
+
+		_gpio_debug_pull_get((void *)&i, &pull);
+		switch (pull) {
+		case 0x0:
+			len += sprintf(list_gpio + len, "[PULL]NO, ");
+			break;
+		case 0x1:
+			len += sprintf(list_gpio + len, "[PULL]PD, ");
+			break;
+		case 0x2:
+			len += sprintf(list_gpio + len, "[PULL]KP, ");
+			break;
+		case 0x3:
+			len += sprintf(list_gpio + len, "[PULL]PU, ");
+			break;
+		default:
+			break;
+		}
+
+		_gpio_debug_drv_get((void *)&i, &drv);
+		len += sprintf(list_gpio + len, "[DRV]%2dmA, ", 2*((int)drv+1));
+
+		if (dir != 0) {
+			_gpio_debug_int_enable_get((void *)&i, &int_en);
+			len += sprintf(list_gpio + len, "[INT]%s, ", int_en ? "YES" : " NO");
+			if (int_en) {
+				_gpio_debug_int_owner_get((void *)&i, &int_owner);
+				switch (int_owner) {
+				case 0x0:
+					len += sprintf(list_gpio + len, "MSS_PROC, ");
+					break;
+				case 0x1:
+					len += sprintf(list_gpio + len, "SPS_PROC, ");
+					break;
+				case 0x2:
+					len += sprintf(list_gpio + len, " LPA_DSP, ");
+					break;
+				case 0x3:
+					len += sprintf(list_gpio + len, "RPM_PROC, ");
+					break;
+				case 0x4:
+					len += sprintf(list_gpio + len, " SC_PROC, ");
+					break;
+				case 0x5:
+					len += sprintf(list_gpio + len, "RESERVED, ");
+					break;
+				case 0x6:
+					len += sprintf(list_gpio + len, "RESERVED, ");
+					break;
+				case 0x7:
+					len += sprintf(list_gpio + len, "    NONE, ");
+					break;
+				default:
+					break;
+				}
+			}
+		}
+
+		list_gpio[99] = '\0';
+		if (m) {
+			seq_printf(m, "%s\n", list_gpio);
+		} else {
+			pr_info("[K] %s\n", list_gpio);
+			curr_len += sprintf(gpio_buffer +
+			curr_len, "%s\n", list_gpio);
+		}
+	}
+
+	return curr_len;
+}
+EXPORT_SYMBOL(msm_dump_gpios);
+#endif 
+
+static int __init msm_gpio_init(void)
+{
+	msm_gpio_probe();
+	register_syscore_ops(&msm_gpio_syscore_ops);
+	gpio_status_debug_init();
+	return 0;
+}
+
+static void __exit msm_gpio_exit(void)
+{
+	unregister_syscore_ops(&msm_gpio_syscore_ops);
+	msm_gpio_remove();
+}
+
+postcore_initcall(msm_gpio_init);
+module_exit(msm_gpio_exit);
 
 static void msm_tlmm_set_field(const struct tlmm_field_cfg *configs,
 			       unsigned id, unsigned width, unsigned val)
@@ -530,89 +922,6 @@ int msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 }
 EXPORT_SYMBOL(msm_gpio_install_direct_irq);
 
-/*
- * This lock class tells lockdep that GPIO irqs are in a different
- * category than their parent, so it won't report false recursion.
- */
-static struct lock_class_key msm_gpio_lock_class;
-
-static int __devinit msm_gpio_probe(struct platform_device *pdev)
-{
-	int ret;
-#ifndef CONFIG_OF
-	int irq, i;
-#endif
-	msm_gpio.gpio_chip.dev = &pdev->dev;
-	spin_lock_init(&tlmm_lock);
-	bitmap_zero(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
-	bitmap_zero(msm_gpio.wake_irqs, NR_MSM_GPIOS);
-	bitmap_zero(msm_gpio.dual_edge_irqs, NR_MSM_GPIOS);
-	ret = gpiochip_add(&msm_gpio.gpio_chip);
-	if (ret < 0)
-		return ret;
-
-#ifndef CONFIG_OF
-	for (i = 0; i < msm_gpio.gpio_chip.ngpio; ++i) {
-		irq = msm_gpio_to_irq(&msm_gpio.gpio_chip, i);
-		irq_set_lockdep_class(irq, &msm_gpio_lock_class);
-		irq_set_chip_and_handler(irq, &msm_gpio_irq_chip,
-					 handle_level_irq);
-		set_irq_flags(irq, IRQF_VALID);
-	}
-#endif
-	ret = request_irq(TLMM_MSM_SUMMARY_IRQ, msm_summary_irq_handler,
-			IRQF_TRIGGER_HIGH, "msmgpio", NULL);
-	if (ret) {
-		pr_err("Request_irq failed for TLMM_MSM_SUMMARY_IRQ - %d\n",
-				ret);
-		return ret;
-	}
-	register_syscore_ops(&msm_gpio_syscore_ops);
-	return 0;
-}
-
-#ifdef CONFIG_OF
-static struct of_device_id msm_gpio_of_match[] __devinitdata = {
-	{.compatible = "qcom,msm-gpio", },
-	{ },
-};
-#endif
-
-static int __devexit msm_gpio_remove(struct platform_device *pdev)
-{
-	int ret;
-
-	unregister_syscore_ops(&msm_gpio_syscore_ops);
-	ret = gpiochip_remove(&msm_gpio.gpio_chip);
-	if (ret < 0)
-		return ret;
-	irq_set_handler(TLMM_MSM_SUMMARY_IRQ, NULL);
-
-	return 0;
-}
-
-static struct platform_driver msm_gpio_driver = {
-	.probe = msm_gpio_probe,
-	.remove = __devexit_p(msm_gpio_remove),
-	.driver = {
-		.name = "msmgpio",
-		.owner = THIS_MODULE,
-		.of_match_table = of_match_ptr(msm_gpio_of_match),
-	},
-};
-
-static void __exit msm_gpio_exit(void)
-{
-	platform_driver_unregister(&msm_gpio_driver);
-}
-module_exit(msm_gpio_exit);
-
-static int __init msm_gpio_init(void)
-{
-	return platform_driver_register(&msm_gpio_driver);
-}
-postcore_initcall(msm_gpio_init);
-
 #ifdef CONFIG_OF
 static int msm_gpio_irq_domain_xlate(struct irq_domain *d,
 				     struct device_node *controller,
@@ -626,10 +935,10 @@ static int msm_gpio_irq_domain_xlate(struct irq_domain *d,
 	if (intsize != 2)
 		return -EINVAL;
 
-	/* hwirq value */
+	
 	*out_hwirq = intspec[0];
 
-	/* irq flags */
+	
 	*out_type = intspec[1] & IRQ_TYPE_SENSE_MASK;
 	return 0;
 }
