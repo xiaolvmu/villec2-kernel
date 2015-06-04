@@ -414,9 +414,6 @@ repeat:
 
 out:
 	spin_unlock(&files->file_lock);
-#if FD_DEBUG
-	fd_num_check(files, fd);
-#endif
 	return error;
 }
 
