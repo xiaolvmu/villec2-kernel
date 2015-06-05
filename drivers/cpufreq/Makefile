@@ -5,10 +5,7 @@ obj-$(CONFIG_CPU_FREQ_STAT)             += cpufreq_stats.o
 
 # CPUfreq governors 
 obj-$(CONFIG_CPU_FREQ_GOV_PERFORMANCE)	+= cpufreq_performance.o
-obj-$(CONFIG_CPU_FREQ_GOV_POWERSAVE)	+= cpufreq_powersave.o
-obj-$(CONFIG_CPU_FREQ_GOV_USERSPACE)	+= cpufreq_userspace.o
 obj-$(CONFIG_CPU_FREQ_GOV_ONDEMAND)	+= cpufreq_ondemand.o
-obj-$(CONFIG_CPU_FREQ_GOV_CONSERVATIVE)	+= cpufreq_conservative.o
 obj-$(CONFIG_CPU_FREQ_GOV_INTELLIMM)	+= cpufreq_intellimm.o
 obj-$(CONFIG_CPU_FREQ_GOV_SMARTMAX)	+= cpufreq_smartmax.o
 obj-$(CONFIG_CPU_FREQ_GOV_HYPER)	+= cpufreq_HYPER.o
@@ -17,7 +14,6 @@ obj-$(CONFIG_CPU_FREQ_GOV_BADASS)       += cpufreq_badass.o
 obj-$(CONFIG_CPU_FREQ_GOV_TRIPNDROID)	+= cpufreq_tripndroid.o
 obj-$(CONFIG_CPU_FREQ_GOV_LIONHEART)		+= cpufreq_lionheart.o
 obj-$(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND)	+= cpufreq_intellidemand.o
-obj-$(CONFIG_CPU_FREQ_GOV_SMARTASS2)  += cpufreq_smartass2.o
 
 # CPUfreq cross-arch helpers
 obj-$(CONFIG_CPU_FREQ_TABLE)		+= freq_table.o
