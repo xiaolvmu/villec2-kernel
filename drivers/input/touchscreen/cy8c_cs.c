@@ -949,7 +949,6 @@ static int cy8c_cs_probe(struct i2c_client *client,
 	cs->use_irq = 1;
 	if (client->irq && cs->use_irq) {
 		ret = request_irq(client->irq, cy8c_cs_irq_handler,
-				  IRQF_TRIGGER_FALLING,
 #ifdef CONFIG_TOUCHSCREEN_CYPRESS_SWEEP2WAKE
 				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_IRQPOLL,
 #else
