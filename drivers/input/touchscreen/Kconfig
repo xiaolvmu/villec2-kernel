@@ -1007,4 +1007,10 @@ config TOUCHSCREEN_MAX11871
 
           If unsure, say N.
 
+config TOUCHSCREEN_CYPRESS_SWEEP2WAKE
+        tristate "Sweep2Wake for Cypress CS touchscreens"
+        depends on TOUCHSCREEN_CYPRESS_CS
+        default n
+
+
 endif
