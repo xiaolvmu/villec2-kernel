@@ -642,7 +642,7 @@ static void __init cpu_pmu_init(struct arm_pmu *armpmu)
 	armpmu->type = ARM_PMU_DEVICE_CPU;
 }
 
-static int __cpuinit pmu_cpu_notify(struct notifier_block *b,
+static int pmu_cpu_notify(struct notifier_block *b,
 					unsigned long action, void *hcpu)
 {
 	if ((action & ~CPU_TASKS_FROZEN) != CPU_STARTING)
@@ -692,7 +692,7 @@ static int cpu_has_active_perf(void)
 	return 0;
 }
 
-static struct notifier_block __cpuinitdata pmu_cpu_notifier = {
+static struct notifier_block pmu_cpu_notifier = {
 	.notifier_call = pmu_cpu_notify,
 };
 

@@ -54,7 +54,7 @@ io footprint cpu 3			: phy 0x8F1F10A0-0x8F1F10A8 : virt 0xFB6000A0-0xFB6000A8
 #define CPU_FOOT_PRINT_MAGIC			0xACBDFE00
 #define CPU_FOOT_PRINT_BASE_CPU0_PHY	(MSM_KERNEL_FOOTPRINT_PHYS)
 
-__CPUINIT
+
 
 /*
  * MSM specific entry point for secondary CPUs.  This provides

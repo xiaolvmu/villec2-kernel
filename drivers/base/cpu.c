@@ -87,7 +87,7 @@ static ssize_t __ref store_online(struct device *dev,
 }
 static DEVICE_ATTR(online, 0644, show_online, store_online);
 
-static void __cpuinit register_cpu_control(struct cpu *cpu)
+static void register_cpu_control(struct cpu *cpu)
 {
 	device_create_file(&cpu->dev, &dev_attr_online);
 }
@@ -222,7 +222,7 @@ static void cpu_device_release(struct device *dev)
 {
 }
 
-int __cpuinit register_cpu(struct cpu *cpu, int num)
+int register_cpu(struct cpu *cpu, int num)
 {
 	int error;
 

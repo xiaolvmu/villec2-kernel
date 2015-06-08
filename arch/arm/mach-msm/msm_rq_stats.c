@@ -92,6 +92,27 @@ static ssize_t store_run_queue_poll_ms(struct kobject *kobj,
 	return count;
 }
 
+static DEFINE_PER_CPU(struct cpu_load_data, cpuload);
+
+#ifdef CONFIG_MSM_MPDEC
+unsigned int get_rq_info(void)
+{
+    unsigned long flags = 0;
+    unsigned int rq = 0;
+
+    spin_lock_irqsave(&rq_lock, flags);
+
+    rq = rq_info.rq_avg;
+    rq_info.rq_avg = 0;
+
+    spin_unlock_irqrestore(&rq_lock, flags);
+
+    return rq;
+}
+EXPORT_SYMBOL(get_rq_info);
+#endif
+
+
 static struct kobj_attribute run_queue_poll_ms_attr =
 	__ATTR(run_queue_poll_ms, S_IWUSR | S_IRUSR, show_run_queue_poll_ms,
 			store_run_queue_poll_ms);

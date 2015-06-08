@@ -2230,7 +2230,7 @@ EXPORT_SYMBOL_GPL(work_busy);
 	__ret1 < 0 ? -1 : 0;						\
 })
 
-static int __cpuinit trustee_thread(void *__gcwq)
+static int trustee_thread(void *__gcwq)
 {
 	struct global_cwq *gcwq = __gcwq;
 	struct worker *worker;
@@ -2335,7 +2335,7 @@ static int __cpuinit trustee_thread(void *__gcwq)
 	return 0;
 }
 
-static void __cpuinit wait_trustee_state(struct global_cwq *gcwq, int state)
+static void wait_trustee_state(struct global_cwq *gcwq, int state)
 __releases(&gcwq->lock)
 __acquires(&gcwq->lock)
 {
