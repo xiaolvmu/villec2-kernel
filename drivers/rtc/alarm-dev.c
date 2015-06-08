@@ -24,8 +24,6 @@
 #include <linux/uaccess.h>
 #include <linux/wakelock.h>
 
-#include <mach/pmic.h>
-
 #include <asm/mach/time.h>
 
 #define ANDROID_ALARM_PRINT_INFO (1U << 0)
@@ -162,41 +160,6 @@ from_old_alarm_set:
 		if (rv < 0)
 			goto err1;
 		break;
-
-#ifdef CONFIG_SHENDU_FEATURE_POWERUP_ALARM
-    case ANDROID_ALARM_SET_POWERUP_RTC:
-    {
-     #pragma message("POWERUP ALARM has been compiled.")
-        uint32_t rtc_alarm_time;
-        struct rtc_time rtc_now;
-        if (copy_from_user(&rtc_alarm_time, (void __user *)arg,
-                    sizeof(rtc_alarm_time))) {
-            rv = -EFAULT;
-            goto err1;
-        }
-        //TODO: if rtc_alarm_time = 0, the mobile will be power up then power off,
-        //      so, set it to max to avoid this, this number means 136.19 years. :)
-        if (rtc_alarm_time == 0)
-            rtc_alarm_time = 604800;
-        printk("\n rtc_alarm_time = %d\n", rtc_alarm_time);
-
-        if (rtc_alarm_time > 0) {
-            if (pmic_rtc_get_time(&rtc_now) < 0) {
-                rtc_now.sec = 0;
-                if (pmic_rtc_start(&rtc_now) < 0) {
-                    printk("Get and set rtc info failed!\n");
-                    break;
-                }
-            }
-            pmic_rtc_disable_alarm(PM_RTC_ALARM_1);
-            rtc_now.sec += rtc_alarm_time;
-            pmic_rtc_enable_alarm(PM_RTC_ALARM_1, &rtc_now);
-            printk("\n rtc_now: sec = %d\n", rtc_now.sec);
-        }
-        break;
-    }
-#endif
-
 	case ANDROID_ALARM_GET_TIME(0):
 		switch (alarm_type) {
 		case ANDROID_ALARM_RTC_WAKEUP:

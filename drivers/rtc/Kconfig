@@ -1181,10 +1181,4 @@ config RTC_DRV_LOONGSON1
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-ls1x.
 
-config SHENDU_FEATURE_POWERUP_ALARM
-	bool "ShenDu OS auto power-up"
-	default y
-	help
-	  ShenDu OS function:auto power-up and power-off alarm.
-
 endif # RTC_CLASS
