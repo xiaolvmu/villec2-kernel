@@ -85,6 +85,20 @@ int get_partition_num_by_name(char *name)
 }
 EXPORT_SYMBOL(get_partition_num_by_name);
 
+const char *get_partition_name_by_num(int partnum)
+{
+	struct mtd_partition *ptn = msm_nand_partitions;
+	int i;
+
+	for (i = 0; i < MSM_MAX_PARTITIONS && ptn->name; i++, ptn++) {
+		if (ptn->offset == partnum)
+			return ptn->name;
+	}
+	return NULL;
+}
+EXPORT_SYMBOL(get_partition_name_by_num);
+
+
 static int __init parse_tag_msm_partition(const struct tag *tag)
 {
 	struct mtd_partition *ptn = msm_nand_partitions;

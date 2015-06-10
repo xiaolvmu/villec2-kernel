@@ -27,6 +27,10 @@
 #include <linux/msm_ssbi.h>
 #include <mach/msm_bus.h>
 
+#ifdef CONFIG_MACH_HTC
+#include <mach/board-ext-htc.h>
+#endif
+
 struct msm_camera_io_ext {
 	uint32_t mdcphy;
 	uint32_t mdcsz;
