@@ -26,7 +26,6 @@
 #include <linux/of_platform.h>
 #include <linux/msm_ssbi.h>
 #include <mach/msm_bus.h>
-#include <mach/board-ext-htc.h>
 
 struct msm_camera_io_ext {
 	uint32_t mdcphy;
