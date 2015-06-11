@@ -404,10 +404,6 @@ static ssize_t hdmi_common_wta_hpd(struct device *dev,
 			DEV_INFO("%s: '%d'\n", __func__,
 				external_common_state->hpd_feature_on);
 		} else if (hpd == 1 && !external_common_state->hpd_feature_on) {
-#ifndef CONFIG_MACH_HTC
-			external_common_state->hpd_feature(1);
-			external_common_state->hpd_feature_on = 1;
-#endif
 			DEV_WARN("%s: '%d'\n", __func__,
 				external_common_state->hpd_feature_on);
 		} else {

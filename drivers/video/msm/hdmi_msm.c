@@ -648,7 +648,6 @@ EXPORT_SYMBOL(hdmi_msm_get_io_base);
 /* Valid Pixel-Clock rates: 25.2MHz, 27MHz, 27.03MHz, 74.25MHz, 148.5MHz */
 static void hdmi_msm_setup_video_mode_lut(void)
 {
-#ifdef CONFIG_MACH_HTC
 	MSM_HDMI_MODES_SET_TIMING(hdmi_common_supported_video_mode_lut, HDMI_VFRMT_640x480p60_4_3);
 	MSM_HDMI_MODES_SET_TIMING(hdmi_common_supported_video_mode_lut, HDMI_VFRMT_720x480p60_4_3);
 	MSM_HDMI_MODES_SET_TIMING(hdmi_common_supported_video_mode_lut, HDMI_VFRMT_720x480p60_16_9);
@@ -661,18 +660,6 @@ static void hdmi_msm_setup_video_mode_lut(void)
 	MSM_HDMI_MODES_SET_TIMING(hdmi_common_supported_video_mode_lut, HDMI_VFRMT_1440x576i50_4_3);
 	MSM_HDMI_MODES_SET_TIMING(hdmi_common_supported_video_mode_lut, HDMI_VFRMT_1440x576i50_16_9);
 	MSM_HDMI_MODES_SET_TIMING(hdmi_common_supported_video_mode_lut, HDMI_VFRMT_1920x1080p24_16_9);
-#else
-	/* Init video mode timings */
-	MSM_HDMI_MODES_INIT_TIMINGS(hdmi_common_supported_video_mode_lut);
-
-	/* Add all supported CEA modes to the lut */
-	MSM_HDMI_MODES_SET_SUPP_TIMINGS(
-		hdmi_common_supported_video_mode_lut, MSM_HDMI_MODES_CEA);
-
-	/* Add any other supported timings (DVI modes, etc.) */
-	MSM_HDMI_MODES_SET_TIMING(hdmi_common_supported_video_mode_lut,
-		HDMI_VFRMT_1280x1024p60_5_4);
-#endif
 }
 
 #ifdef PORT_DEBUG
