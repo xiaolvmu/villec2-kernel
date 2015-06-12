@@ -2425,9 +2425,6 @@ void mdp4_hw_init(void)
 static int mdp_bus_scale_restore_request(void);
 static struct msm_panel_common_pdata *mdp_pdata;
 
-static bool mdp_gamma_cooler_colors = false;
-module_param(mdp_gamma_cooler_colors, bool, 0664);
-
 static int mdp_on(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -2493,11 +2490,6 @@ static int mdp_on(struct platform_device *pdev)
 
 	mdp_histogram_ctrl_all(TRUE);
 
-	if (mdp_pdata->mdp_gamma && !mdp_gamma_cooler_colors)
-		mdp_pdata->mdp_gamma();
-	else if (mdp_pdata->mdp_gamma_cool && mdp_gamma_cooler_colors)
-		mdp_pdata->mdp_gamma_cool();
-
 	if (ret == 0)
 		ret = panel_next_late_init(pdev);
 
@@ -2507,7 +2499,6 @@ static int mdp_on(struct platform_device *pdev)
 }
 
 static int mdp_resource_initialized;
-static struct msm_panel_common_pdata *mdp_pdata;
 
 uint32 mdp_hw_revision;
 
@@ -2821,42 +2812,6 @@ static int mdp_irq_clk_setup(struct platform_device *pdev,
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 	}
 	return 0;
-}
-
-static int mdp_write_reg_mask(uint32_t reg, uint32_t val, uint32_t mask)
-{
-        uint32_t oldval, newval;
-
-        oldval = inpdw(MDP_BASE + reg);
-
-        oldval &= (~mask);
-        val &= mask;
-        newval = oldval | val;
-
-        outpdw(MDP_BASE + reg, newval);
-
-        return 0;
-
-}
-
-void mdp_color_enhancement(const struct mdp_table_entry *reg_seq, int size)
-{
-        int i;
-
-        printk(KERN_INFO "%s\n", __func__);
-
-        mdp_clk_ctrl(1);
-        mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-        for (i = 0; i < size; i++) {
-                if (reg_seq[i].mask == 0x0)
-                        outpdw(MDP_BASE + reg_seq[i].reg, reg_seq[i].val);
-                else
-                        mdp_write_reg_mask(reg_seq[i].reg, reg_seq[i].val, reg_seq[i].mask);
-        }
-        mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
-        mdp_clk_ctrl(0);
-
-        return ;
 }
 
 
