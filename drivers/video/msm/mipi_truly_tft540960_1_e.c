@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,11 +26,12 @@ static int mipi_truly_bl_ctrl;
 #define TRULY_SLEEP_OFF_DELAY 150
 #define TRULY_DISPLAY_ON_DELAY 150
 
+/* common setting */
 static char exit_sleep[2] = {0x11, 0x00};
 static char display_on[2] = {0x29, 0x00};
 static char display_off[2] = {0x28, 0x00};
 static char enter_sleep[2] = {0x10, 0x00};
-static char write_ram[2] = {0x2c, 0x00}; 
+static char write_ram[2] = {0x2c, 0x00}; /* write ram */
 
 static struct dsi_cmd_desc truly_display_off_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 150, sizeof(display_off), display_off},
@@ -38,6 +39,7 @@ static struct dsi_cmd_desc truly_display_off_cmds[] = {
 };
 
 
+/* TFT540960_1_E CMD mode */
 static char cmd0[5] = {
 	0xFF, 0xAA, 0x55, 0x25,
 	0x01,
@@ -57,8 +59,9 @@ static char cmd4[2] = {
 	0xB1, 0xeC,
 };
 
+/* add 0X BD command */
 static char cmd26_2[6] = {
-	0xBD, 0x01, 0x48, 0x10, 0x38, 0x01 
+	0xBD, 0x01, 0x48, 0x10, 0x38, 0x01 /* 59 HZ */
 };
 
 static char cmd5[5] = {
@@ -357,6 +360,7 @@ static struct dsi_cmd_desc truly_cmd_display_on_cmds[] = {
 
 };
 
+/* TFT540960_1_E VIDEO mode */
 static char video0[5] = {
 	0xFF, 0xAA, 0x55, 0x25,
 	0x01,
@@ -675,6 +679,7 @@ static int mipi_truly_lcd_on(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
 	struct mipi_panel_info *mipi;
+	struct dcs_cmd_req cmdreq;
 
 	mfd = platform_get_drvdata(pdev);
 
@@ -688,14 +693,21 @@ static int mipi_truly_lcd_on(struct platform_device *pdev)
 	pr_info("%s: mode = %d\n", __func__, mipi->mode);
 	msleep(120);
 
+	memset(&cmdreq, 0, sizeof(cmdreq));
 	if (mipi->mode == DSI_VIDEO_MODE) {
-		mipi_dsi_cmds_tx(&truly_tx_buf,
-			truly_video_display_on_cmds,
-			ARRAY_SIZE(truly_video_display_on_cmds));
+		cmdreq.cmds = truly_video_display_on_cmds;
+		cmdreq.cmds_cnt = ARRAY_SIZE(truly_video_display_on_cmds);
+		cmdreq.flags = CMD_REQ_COMMIT;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+		mipi_dsi_cmdlist_put(&cmdreq);
 	} else if (mipi->mode == DSI_CMD_MODE) {
-		mipi_dsi_cmds_tx(&truly_tx_buf,
-			truly_cmd_display_on_cmds,
-			ARRAY_SIZE(truly_cmd_display_on_cmds));
+		cmdreq.cmds = truly_cmd_display_on_cmds;
+		cmdreq.cmds_cnt = ARRAY_SIZE(truly_cmd_display_on_cmds);
+		cmdreq.flags = CMD_REQ_COMMIT;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+		mipi_dsi_cmdlist_put(&cmdreq);
 	}
 
 	return 0;
@@ -704,6 +716,7 @@ static int mipi_truly_lcd_on(struct platform_device *pdev)
 static int mipi_truly_lcd_off(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
+	struct dcs_cmd_req cmdreq;
 
 	mfd = platform_get_drvdata(pdev);
 
@@ -712,8 +725,13 @@ static int mipi_truly_lcd_off(struct platform_device *pdev)
 	if (mfd->key != MFD_KEY)
 		return -EINVAL;
 
-	mipi_dsi_cmds_tx(&truly_tx_buf, truly_display_off_cmds,
-			ARRAY_SIZE(truly_display_off_cmds));
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds = truly_display_off_cmds;
+	cmdreq.cmds_cnt = ARRAY_SIZE(truly_display_off_cmds);
+	cmdreq.flags = CMD_REQ_COMMIT;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+	mipi_dsi_cmdlist_put(&cmdreq);
 
 	return 0;
 }
@@ -808,6 +826,9 @@ static void mipi_truly_set_backlight(struct msm_fb_data_type *mfd)
 
 	if (mipi_truly_pdata->bl_lock) {
 		if (!mipi_truly_bl_ctrl) {
+			/* Level received is of range 1 to bl_max,
+			   We need to convert the levels to 1
+			   to 31 */
 			bl_level = (2 * bl_level * 31 + mfd->panel_info.bl_max)
 					/(2 * mfd->panel_info.bl_max);
 			if (bl_level == old_bl_level)

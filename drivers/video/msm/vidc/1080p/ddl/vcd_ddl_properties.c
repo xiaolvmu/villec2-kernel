@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2013, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -174,16 +174,17 @@ u32 ddl_encoder_ready_to_start(struct ddl_client_context *ddl)
 			return false;
 		}
 		if (encoder->ltr_control.ltrmode.ltr_mode ==
-			VCD_LTR_MODE_MANUAL) {
+				VCD_LTR_MODE_MANUAL) {
 			DDL_MSG_ERROR("%s: Manual LTR mode not supported!",
 				__func__);
 			return false;
 		}
 		DDL_MSG_HIGH("%s: LTR: mode = %u, count = %u, period = %u",
 			__func__, (u32)encoder->ltr_control.ltrmode.ltr_mode,
-		encoder->ltr_control.ltr_count,
-		encoder->ltr_control.ltr_period);
+			encoder->ltr_control.ltr_count,
+			encoder->ltr_control.ltr_period);
 	}
+
 	return true;
 }
 
@@ -240,13 +241,6 @@ static u32 ddl_set_dec_property(struct ddl_client_context *ddl,
 			(ddl_valid_buffer_requirement(
 			&decoder->min_input_buf_req, buffer_req))) {
 			decoder->client_input_buf_req = *buffer_req;
-			DDL_MSG_HIGH("set DDL_IN_BUF_REQ: min = %u, "\
-				"max = %u, act = %u, size = %u, align = %u, "\
-				"buf_pool_id = %u, meta_buf_size = %u",
-				buffer_req->min_count, buffer_req->max_count,
-				buffer_req->actual_count, buffer_req->sz,
-				buffer_req->align, buffer_req->buf_pool_id,
-				buffer_req->meta_buffer_size);
 			vcd_status = VCD_S_SUCCESS;
 		}
 	}
@@ -264,15 +258,9 @@ static u32 ddl_set_dec_property(struct ddl_client_context *ddl,
 			DDLCLIENT_STATE_IS(ddl, DDL_CLIENT_OPEN)) &&
 			(ddl_valid_buffer_requirement(
 			&decoder->min_output_buf_req, buffer_req))) {
-			decoder->client_output_buf_req = *buffer_req;
-			DDL_MSG_HIGH("set DDL_OUT_BUF_REQ: min = %u, "\
-				"max = %u, act = %u, size = %u, align = %u, "\
-				"buf_pool_id = %u, meta_buf_size = %u",
-				buffer_req->min_count, buffer_req->max_count,
-				buffer_req->actual_count, buffer_req->sz,
-				buffer_req->align, buffer_req->buf_pool_id,
-				buffer_req->meta_buffer_size);
-			vcd_status = VCD_S_SUCCESS;
+				decoder->client_output_buf_req =
+					*buffer_req;
+				vcd_status = VCD_S_SUCCESS;
 		}
 	}
 	break;
@@ -322,7 +310,7 @@ static u32 ddl_set_dec_property(struct ddl_client_context *ddl,
 				ddl_set_default_decoder_buffer_req(decoder,
 					true);
 			}
-			DDL_MSG_HIGH("set VCD_I_FRAME_SIZE width = %d"
+			DDL_MSG_LOW("set  VCD_I_FRAME_SIZE width = %d"
 				" height = %d\n",
 				frame_size->width, frame_size->height);
 			vcd_status = VCD_S_SUCCESS;
@@ -536,7 +524,6 @@ static u32 ddl_set_dec_property(struct ddl_client_context *ddl,
 	}
 	break;
 	case VCD_REQ_PERF_LEVEL:
-		DDL_MSG_LOW("%s: VCD_REQ_PERF_LEVEL (do nithing)", __func__);
 		vcd_status = VCD_S_SUCCESS;
 		break;
 	default:
@@ -714,7 +701,7 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 		struct vcd_property_multi_slice *multi_slice =
 			(struct vcd_property_multi_slice *)
 				property_value;
-		DDL_MSG_HIGH("VCD_I_MULTI_SLICE eMSliceSel %d "\
+		DDL_MSG_HIGH("VCD_I_MULTI_SLICE eMSliceSel %d  "\
 				"nMSliceSize %d Tot#of MB %d "\
 				"encoder->frame_size.width = %d "\
 				"encoder->frame_size.height = %d",
@@ -934,10 +921,8 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 			property_hdr->sz &&
 			((buffer_format->buffer_format ==
 			VCD_BUFFER_FORMAT_NV12_16M2KA) ||
-			(buffer_format->buffer_format ==
-			VCD_BUFFER_FORMAT_TILE_4x2) ||
-			(buffer_format->buffer_format ==
-			VCD_BUFFER_FORMAT_NV21_16M2KA))) {
+			(VCD_BUFFER_FORMAT_TILE_4x2 ==
+			buffer_format->buffer_format))) {
 			if (buffer_format->buffer_format !=
 				encoder->buf_format.buffer_format) {
 				encoder->buf_format = *buffer_format;
@@ -1015,8 +1000,8 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 					align_virtual_addr =
 					recon_buffers->kernel_virtual_addr +
 					recon_buffers->ysize;
-				DDL_MSG_LOW("Y::KVirt: %p, KPhys: %p "\
-					"UV::KVirt: %p, KPhys: %p\n",
+				DDL_MSG_LOW("Y::KVirt: %p,KPhys: %p"
+							"UV::KVirt: %p,KPhys: %p\n",
 				encoder->hw_bufs.dpb_y[index_hw_bufs].
 				align_virtual_addr,
 				encoder->hw_bufs.dpb_y[index_hw_bufs].
@@ -1026,7 +1011,7 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 				encoder->hw_bufs.dpb_c[index_hw_bufs].
 				align_physical_addr);
 				vcd_status = VCD_S_SUCCESS;
-			}
+				}
 		}
 	}
 	break;
@@ -1081,7 +1066,6 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 		u32 num_mb, num_slices;
 		struct vcd_property_hdr slice_property_hdr;
 		struct vcd_property_meta_data_enable slice_meta_data;
-		slice_meta_data.meta_data_enable_flag = 0;
 		DDL_MSG_HIGH("Set property VCD_I_SLICE_DELIVERY_MODE\n");
 		if (sizeof(u32) == property_hdr->sz &&
 			encoder->codec.codec == VCD_CODEC_H264 &&
@@ -1131,14 +1115,21 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 				encoder->client_output_buf_req.sz/num_slices;
 				encoder->client_output_buf_req.sz =
 				DDL_ALIGN(output_buf_size, DDL_KILO_BYTE(4));
+				if (encoder->client_output_buf_req. \
+					actual_count < encoder-> \
+					client_output_buf_req.min_count) {
+					encoder->client_output_buf_req. \
+					actual_count = encoder-> \
+					client_output_buf_req.min_count;
+				}
 				encoder->output_buf_req =
 				encoder->client_output_buf_req;
-				DDL_MSG_HIGH("%s num_mb = %u num_slices = %u "
-				"output_buf_count = %u "
-				"output_buf_size = %u aligned size = %u\n",
+				DDL_MSG_HIGH("%s num_mb = %u num_slices = %u" \
+				" min_count = %u act_count = %u" \
+				" aligned size = %u\n",
 				__func__, num_mb, num_slices,
 				encoder->client_output_buf_req.min_count,
-				output_buf_size,
+				encoder->client_output_buf_req.actual_count,
 				encoder->client_output_buf_req.sz);
 				vcd_status = VCD_S_SUCCESS;
 			}
@@ -1181,7 +1172,6 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 		}
 	break;
 	case VCD_REQ_PERF_LEVEL:
-		DDL_MSG_LOW("%s: VCD_REQ_PERF_LEVEL (do nithing)", __func__);
 		vcd_status = VCD_S_SUCCESS;
 		break;
 	case VCD_I_ENABLE_DELIMITER_FLAG:
@@ -1212,25 +1202,26 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 		}
 		break;
 	}
-	case VCD_I_ENABLE_VUI_BITSTREAM_RESTRICT_FLAG:
+	case VCD_I_H263_PLUSPTYPE:
 	{
-		struct vcd_property_bitstream_restrict_enable *restrict_enable =
-			(struct vcd_property_bitstream_restrict_enable *)
-				property_value;
-		if (sizeof(struct vcd_property_bitstream_restrict_enable) ==
-			property_hdr->sz &&
-			encoder->codec.codec == VCD_CODEC_H264) {
-			encoder->bitstream_restrict_enable =
-			restrict_enable->bitstream_restrict_enable_flag;
+		struct vcd_property_plusptype *plusptype =
+			(struct vcd_property_plusptype *)property_value;
+
+		if ((sizeof(struct vcd_property_plusptype) ==
+			property_hdr->sz) && encoder->codec.codec ==
+			VCD_CODEC_H263) {
+			encoder->plusptype_enable = plusptype->plusptype_enable;
+			DDL_MSG_LOW("\nencoder->plusptype_enable = %u",
+						encoder->plusptype_enable);
 			vcd_status = VCD_S_SUCCESS;
 		}
 		break;
 	}
 	default:
-		DDL_MSG_ERROR("%s: INVALID ID 0x%x\n", __func__,
-			(int)property_hdr->prop_id);
+		DDL_MSG_ERROR("%s: unknown prop_id = 0x%x", __func__,
+			property_hdr->prop_id);
 		vcd_status = VCD_ERR_ILLEGAL_OP;
-		break;
+	break;
 	}
 	return vcd_status;
 }
@@ -1259,9 +1250,6 @@ static u32 ddl_get_dec_property(struct ddl_client_context *ddl,
 			*(struct vcd_property_frame_size *)
 				property_value =
 					decoder->client_frame_size;
-			DDL_MSG_HIGH("get VCD_I_FRAME_SIZE WxH = %ux%u, "\
-				"SxSH = %ux%u", fz_size->width, fz_size->height,
-				fz_size->stride, fz_size->scan_lines);
 			vcd_status = VCD_S_SUCCESS;
 		}
 	break;
@@ -1294,17 +1282,6 @@ static u32 ddl_get_dec_property(struct ddl_client_context *ddl,
 			*(struct vcd_buffer_requirement *)
 				property_value =
 					decoder->client_input_buf_req;
-			DDL_MSG_HIGH("get DDL_IN_BUF_REQ: min = %u, "\
-				"max = %u, act = %u, size = %u, "\
-				"align = %u, buf_pool_id = %u, "\
-				"meta_buf_size = %u",
-				decoder->client_input_buf_req.min_count,
-				decoder->client_input_buf_req.max_count,
-				decoder->client_input_buf_req.actual_count,
-				decoder->client_input_buf_req.sz,
-				decoder->client_input_buf_req.align,
-				decoder->client_input_buf_req.buf_pool_id,
-				decoder->client_input_buf_req.meta_buffer_size);
 			vcd_status = VCD_S_SUCCESS;
 		}
 	break;
@@ -1313,17 +1290,7 @@ static u32 ddl_get_dec_property(struct ddl_client_context *ddl,
 			property_hdr->sz) {
 				*(struct vcd_buffer_requirement *)
 			property_value = decoder->client_output_buf_req;
-			DDL_MSG_HIGH("get DDL_OUT_BUF_REQ: min = %u, "\
-			"max = %u, act = %u, size = %u, align = %u, "\
-			"buf_pool_id = %u, meta_buf_size = %u",
-			decoder->client_output_buf_req.min_count,
-			decoder->client_output_buf_req.max_count,
-			decoder->client_output_buf_req.actual_count,
-			decoder->client_output_buf_req.sz,
-			decoder->client_output_buf_req.align,
-			decoder->client_output_buf_req.buf_pool_id,
-			decoder->client_output_buf_req.meta_buffer_size);
-			vcd_status = VCD_S_SUCCESS;
+				vcd_status = VCD_S_SUCCESS;
 		}
 	break;
 	case VCD_I_CODEC:
@@ -1408,7 +1375,7 @@ static u32 ddl_get_dec_property(struct ddl_client_context *ddl,
 		break;
 	case VCD_I_METADATA_ENABLE:
 	case VCD_I_METADATA_HEADER:
-		DDL_MSG_HIGH("Meta Data Interface is Requested");
+		DDL_MSG_ERROR("Meta Data Interface is Requested");
 		vcd_status = ddl_get_metadata_params(ddl, property_hdr,
 			property_value);
 		vcd_status = VCD_S_SUCCESS;
@@ -1422,13 +1389,6 @@ static u32 ddl_get_dec_property(struct ddl_client_context *ddl,
 	case VCD_I_DISABLE_DMX_SUPPORT:
 		if (sizeof(u32) == property_hdr->sz) {
 			*(u32 *)property_value = res_trk_get_disable_dmx();
-			vcd_status = VCD_S_SUCCESS;
-		}
-	break;
-	case VCD_I_ENABLE_SEC_METADATA:
-		if (sizeof(u32) == property_hdr->sz) {
-			*(u32 *)property_value =
-				res_trk_get_enable_sec_metadata();
 			vcd_status = VCD_S_SUCCESS;
 		}
 	break;
@@ -1720,7 +1680,7 @@ static u32 ddl_get_enc_property(struct ddl_client_context *ddl,
 	break;
 	case VCD_I_METADATA_ENABLE:
 	case VCD_I_METADATA_HEADER:
-		DDL_MSG_ERROR("Meta Data Interface is Requested");
+		DDL_MSG_HIGH("Meta Data Interface is Requested");
 		vcd_status = ddl_get_metadata_params(ddl, property_hdr,
 			property_value);
 		vcd_status = VCD_S_SUCCESS;
@@ -1759,15 +1719,6 @@ static u32 ddl_get_enc_property(struct ddl_client_context *ddl,
 			vcd_status = VCD_S_SUCCESS;
 		}
 		break;
-	case VCD_I_ENABLE_VUI_BITSTREAM_RESTRICT_FLAG:
-		if (sizeof(struct vcd_property_bitstream_restrict_enable) ==
-			property_hdr->sz) {
-			((struct vcd_property_bitstream_restrict_enable *)
-				property_value)->bitstream_restrict_enable_flag
-					= encoder->bitstream_restrict_enable;
-			vcd_status = VCD_S_SUCCESS;
-		}
-	break;
 	case VCD_I_CAPABILITY_LTR_COUNT:
 		if (sizeof(struct vcd_property_range_type) ==
 			property_hdr->sz) {
@@ -1787,7 +1738,7 @@ static u32 ddl_get_enc_property(struct ddl_client_context *ddl,
 		if (sizeof(struct vcd_property_ltrmode_type) ==
 			property_hdr->sz) {
 			((struct vcd_property_ltrmode_type *)
-				property_value)->ltr_mode =
+			property_value)->ltr_mode =
 				encoder->ltr_control.ltrmode.ltr_mode;
 			DDL_MSG_HIGH("%s: ltr_mode = %u", __func__,
 				(u32)(((struct vcd_property_ltrmode_type *)
@@ -1817,7 +1768,7 @@ static u32 ddl_get_enc_property(struct ddl_client_context *ddl,
 				ltr_period.ltr_period = 0;
 			else
 				ltr_period.ltr_period =
-			encoder->ltr_control.ltr_period - 1;
+					encoder->ltr_control.ltr_period - 1;
 			*(struct vcd_property_ltrperiod_type *)property_value =
 				ltr_period;
 			DDL_MSG_HIGH("%s: ltr_period = %u", __func__,
@@ -1953,28 +1904,28 @@ static u32 ddl_set_enc_dynamic_property(struct ddl_client_context *ddl,
 					ltr_ctrl->failed_use_cmd.ltr_frames =
 						ltruse->ltr_frames;
 					DDL_MSG_ERROR("%s: index (%d) "\
-						"not found. Callback requested. "\
-						"ltr_id = %u, ltr_frames = %u",
-						__func__, idx, ltruse->ltr_id,
-						ltruse->ltr_frames);
+					"not found. Callback requested. "\
+					"ltr_id = %u, ltr_frames = %u",
+					__func__, idx, ltruse->ltr_id,
+					ltruse->ltr_frames);
 				} else {
 					ddl_use_ltr_from_list(ltr_ctrl, idx);
 					ltr_ctrl->ltr_use_frames =
 						ltruse->ltr_frames;
 					if (ltr_ctrl->using == false)
 						ltr_ctrl->\
-							out_frame_cnt_to_use_this_ltr =
+						out_frame_cnt_to_use_this_ltr =
 							ltruse->ltr_frames;
 					else
 						ltr_ctrl->\
-							pending_chg_ltr_useframes =
+						pending_chg_ltr_useframes =
 							true;
 					ltr_ctrl->first_ltr_use_arvd = true;
 					ltr_ctrl->use_ltr_reqd = true;
 					DDL_MSG_HIGH("%s: index (%d) found. "\
-						"num frames to use this ltr_id (%u) "\
-						"is %u", __func__, idx,
-						ltruse->ltr_id, ltruse->ltr_frames);
+					"num frames to use this ltr_id (%u) "\
+					"is %u", __func__, idx,
+					ltruse->ltr_id, ltruse->ltr_frames);
 				}
 				dynamic_prop_change = DDL_ENC_LTR_USE_FRAME;
 				vcd_status = VCD_S_SUCCESS;
@@ -1983,7 +1934,7 @@ static u32 ddl_set_enc_dynamic_property(struct ddl_client_context *ddl,
 					"LTR ID starts from %d", __func__,
 					ltruse->ltr_id,
 					(u32)DDL_LTR_FRAME_START_ID);
-					vcd_status = VCD_ERR_ILLEGAL_OP;
+				vcd_status = VCD_ERR_ILLEGAL_OP;
 			}
 		}
 	}
@@ -2201,14 +2152,12 @@ void ddl_set_default_encoder_buffer_req(struct ddl_encoder_data *encoder)
 		encoder->input_buf_req.min_count;
 	encoder->input_buf_req.max_count    = DDL_MAX_BUFFER_COUNT;
 	encoder->input_buf_req.sz = y_cb_cr_size;
-	if ((encoder->buf_format.buffer_format ==
-		VCD_BUFFER_FORMAT_NV12_16M2KA) ||
-		(encoder->buf_format.buffer_format ==
-		VCD_BUFFER_FORMAT_NV21_16M2KA))
+	if (encoder->buf_format.buffer_format ==
+		VCD_BUFFER_FORMAT_NV12_16M2KA)
 		encoder->input_buf_req.align =
 			DDL_LINEAR_BUFFER_ALIGN_BYTES;
-	else if (encoder->buf_format.buffer_format ==
-		VCD_BUFFER_FORMAT_TILE_4x2)
+	else if (VCD_BUFFER_FORMAT_TILE_4x2 ==
+		encoder->buf_format.buffer_format)
 		encoder->input_buf_req.align = DDL_TILE_BUFFER_ALIGN_BYTES;
 	encoder->client_input_buf_req = encoder->input_buf_req;
 	memset(&encoder->output_buf_req , 0 ,
@@ -2218,6 +2167,8 @@ void ddl_set_default_encoder_buffer_req(struct ddl_encoder_data *encoder)
 		encoder->output_buf_req.min_count + 3;
 	encoder->output_buf_req.max_count    = DDL_MAX_BUFFER_COUNT;
 	encoder->output_buf_req.align	= DDL_LINEAR_BUFFER_ALIGN_BYTES;
+	if (y_cb_cr_size >= VCD_DDL_720P_YUV_BUF_SIZE)
+		y_cb_cr_size = y_cb_cr_size>>1;
 	encoder->output_buf_req.sz =
 		DDL_ALIGN(y_cb_cr_size, DDL_KILO_BYTE(4));
 	ddl_set_default_encoder_metadata_buffer_size(encoder);
@@ -2234,19 +2185,14 @@ u32 ddl_set_default_decoder_buffer_req(struct ddl_decoder_data *decoder,
 	struct vcd_buffer_requirement *output_buf_req;
 	u32  min_dpb, y_cb_cr_size;
 	u32  frame_height_actual = 0;
-	u32  min_dpb_from_res_trk = 0;
 
-	if (!decoder->codec.codec) {
-		DDL_MSG_ERROR("%s: codec not set", __func__);
+	if (!decoder->codec.codec)
 		return false;
-	}
 	if (estimate) {
-		if (decoder->cont_mode &&
-			decoder->codec.codec == VCD_CODEC_H264) {
-			min_dpb = res_trk_get_min_dpb_count();
-			min_dpb_from_res_trk = 1;
-		} else
+		if (!decoder->cont_mode)
 			min_dpb = ddl_decoder_min_num_dpb(decoder);
+		else
+			min_dpb = res_trk_get_min_dpb_count();
 		frame_size = &decoder->client_frame_size;
 		output_buf_req = &decoder->client_output_buf_req;
 		input_buf_req = &decoder->client_input_buf_req;
@@ -2277,13 +2223,14 @@ u32 ddl_set_default_decoder_buffer_req(struct ddl_decoder_data *decoder,
 	}
 	memset(output_buf_req, 0,
 		sizeof(struct vcd_buffer_requirement));
-	if (!decoder->idr_only_decoding && !min_dpb_from_res_trk)
+	if (!decoder->idr_only_decoding && !decoder->cont_mode)
 		output_buf_req->actual_count = min_dpb + 4;
 	else
 		output_buf_req->actual_count = min_dpb;
 	output_buf_req->min_count = min_dpb;
 	output_buf_req->max_count = DDL_MAX_BUFFER_COUNT;
 	output_buf_req->sz = y_cb_cr_size;
+	DDL_MSG_LOW("output_buf_req->sz : %d", output_buf_req->sz);
 	if (decoder->buf_format.buffer_format != VCD_BUFFER_FORMAT_NV12)
 		output_buf_req->align = DDL_TILE_BUFFER_ALIGN_BYTES;
 	else
@@ -2292,14 +2239,6 @@ u32 ddl_set_default_decoder_buffer_req(struct ddl_decoder_data *decoder,
 		output_buf_req);
 
 	decoder->min_output_buf_req = *output_buf_req;
-	DDL_MSG_HIGH("out_buf_req: estimate = %u, WxH = %ux%u, "\
-		"min_dpb = %u, sz = %d, act = %u, min = %u, max = %u, "\
-		"align = %u, meta_buf_size = %d", estimate,
-		frame_size->width, frame_size->height, min_dpb,
-		output_buf_req->sz, output_buf_req->actual_count,
-		output_buf_req->min_count, output_buf_req->max_count,
-		output_buf_req->align, output_buf_req->meta_buffer_size);
-
 	memset(input_buf_req, 0,
 		sizeof(struct vcd_buffer_requirement));
 	input_buf_req->min_count = 1;
@@ -2416,8 +2355,8 @@ static u32 ddl_decoder_min_num_dpb(struct ddl_decoder_data *decoder)
 	case VCD_CODEC_H264:
 	{
 		u32 yuv_size_in_mb = DDL_MIN(DDL_NO_OF_MB(
-			decoder->client_frame_size.width,
-			decoder->client_frame_size.height),
+			decoder->client_frame_size.stride,
+			decoder->client_frame_size.scan_lines),
 			MAX_FRAME_SIZE_L4PT0_MBS);
 		min_dpb = DDL_MIN((MAX_DPB_SIZE_L4PT0_MBS /
 				yuv_size_in_mb), 16);
@@ -2507,5 +2446,6 @@ void ddl_set_initial_default_values(struct ddl_client_context *ddl)
 		encoder->frame_rate.fps_denominator = 1;
 		ddl_set_default_enc_property(ddl);
 		encoder->sps_pps.sps_pps_for_idr_enable_flag = false;
+		encoder->plusptype_enable = 0;
 	}
 }

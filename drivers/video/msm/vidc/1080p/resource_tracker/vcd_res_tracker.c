@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2013, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,6 +18,7 @@
 #include <linux/pm_runtime.h>
 #include <mach/clk.h>
 #include <mach/msm_memtypes.h>
+#include <mach/iommu_domains.h>
 #include <linux/interrupt.h>
 #include <linux/memory_alloc.h>
 #include <asm/sizes.h>
@@ -30,8 +31,6 @@
 static unsigned int vidc_clk_table[5] = {
 	48000000, 133330000, 200000000, 228570000, 266670000,
 };
-static unsigned int restrk_mmu_subsystem[] =	{
-		MSM_SUBSYSTEM_VIDEO, MSM_SUBSYSTEM_VIDEO_FWARE};
 static struct res_trk_context resource_context;
 
 #define VIDC_FW	"vidc_1080p.fw"
@@ -56,10 +55,8 @@ static void res_trk_put_clk(void);
 static void *res_trk_pmem_map
 	(struct ddl_buf_addr *addr, size_t sz, u32 alignment)
 {
-	u32 offset = 0, flags = 0;
-	u32 index = 0;
+	u32 offset = 0;
 	struct ddl_context *ddl_context;
-	struct msm_mapped_buffer *mapped_buffer = NULL;
 	int ret = 0;
 	unsigned long iova = 0;
 	unsigned long buffer_size  = 0;
@@ -100,53 +97,11 @@ static void *res_trk_pmem_map
 		addr->align_virtual_addr = addr->virtual_base_addr + offset;
 		addr->buffer_size = buffer_size;
 	} else {
-		if (!res_trk_check_for_sec_session()) {
-			if (!addr->alloced_phys_addr) {
-				pr_err(" %s() alloced addres NULL", __func__);
-				goto bail_out;
-			}
-			flags = MSM_SUBSYSTEM_MAP_IOVA |
-				MSM_SUBSYSTEM_MAP_KADDR;
-			if (alignment == DDL_KILO_BYTE(128))
-					index = 1;
-			else if (alignment > SZ_4K)
-				flags |= MSM_SUBSYSTEM_ALIGN_IOVA_8K;
-			addr->mapped_buffer =
-			msm_subsystem_map_buffer(
-			(unsigned long)addr->alloced_phys_addr,
-			sz, flags, &restrk_mmu_subsystem[index],
-			sizeof(restrk_mmu_subsystem[index])/
-				sizeof(unsigned int));
-			if (IS_ERR(addr->mapped_buffer)) {
-				pr_err(" %s() buffer map failed", __func__);
-				goto bail_out;
-			}
-			mapped_buffer = addr->mapped_buffer;
-			if (!mapped_buffer->vaddr || !mapped_buffer->iova[0]) {
-				pr_err("%s() map buffers failed\n", __func__);
-				goto bail_out;
-			}
-			addr->physical_base_addr =
-				 (u8 *)mapped_buffer->iova[0];
-			addr->virtual_base_addr =
-					mapped_buffer->vaddr;
-		} else {
-			addr->physical_base_addr =
-				(u8 *) addr->alloced_phys_addr;
-			addr->virtual_base_addr =
-				(u8 *)addr->alloced_phys_addr;
-		}
-		addr->align_physical_addr = (u8 *) DDL_ALIGN((u32)
-		addr->physical_base_addr, alignment);
-		offset = (u32)(addr->align_physical_addr -
-				addr->physical_base_addr);
-		addr->align_virtual_addr = addr->virtual_base_addr + offset;
-		addr->buffer_size = sz;
+		pr_err("ION must be enabled.");
+		goto bail_out;
 	}
 	return addr->virtual_base_addr;
 bail_out:
-	if (IS_ERR(addr->mapped_buffer))
-		msm_subsystem_unmap_buffer(addr->mapped_buffer);
 	return NULL;
 ion_unmap_bail_out:
 	if (!IS_ERR_OR_NULL(addr->alloc_handle)) {
@@ -161,10 +116,8 @@ static void res_trk_pmem_free(struct ddl_buf_addr *addr)
 {
 	struct ddl_context *ddl_context;
 
-	if (!addr) {
-		DDL_MSG_ERROR("\n%s() NULL address", __func__);
+	if (!addr)
 		return;
-	}
 
 	ddl_context = ddl_get_context();
 	if (ddl_context->video_ion_client) {
@@ -173,12 +126,6 @@ static void res_trk_pmem_free(struct ddl_buf_addr *addr)
 			 addr->alloc_handle);
 			addr->alloc_handle = NULL;
 		}
-	} else {
-		if (addr->mapped_buffer)
-			msm_subsystem_unmap_buffer(addr->mapped_buffer);
-		if (addr->alloced_phys_addr)
-			free_contiguous_memory_by_paddr(
-			(unsigned long)addr->alloced_phys_addr);
 	}
 	memset(addr, 0 , sizeof(struct ddl_buf_addr));
 }
@@ -265,8 +212,7 @@ static void res_trk_pmem_unmap(struct ddl_buf_addr *addr)
 			addr->virtual_base_addr = NULL;
 			addr->physical_base_addr = NULL;
 		}
-	} else if (addr->mapped_buffer)
-		msm_subsystem_unmap_buffer(addr->mapped_buffer);
+	}
 	addr->mapped_buffer = NULL;
 }
 
@@ -383,6 +329,7 @@ static u32 res_trk_sel_clk_rate(unsigned long hclk_rate)
 	mutex_lock(&resource_context.lock);
 	if (clk_set_rate(resource_context.vcodec_clk,
 		hclk_rate)) {
+		VCDRES_MSG_ERROR("vidc hclk set rate failed\n");
 		status = false;
 	} else
 		resource_context.vcodec_clk_rate = hclk_rate;
@@ -458,6 +405,10 @@ bail_out:
 static struct ion_client *res_trk_create_ion_client(void){
 	struct ion_client *video_client;
 	video_client = msm_ion_client_create(-1, "video_client");
+	if (IS_ERR_OR_NULL(video_client)) {
+		VCDRES_MSG_ERROR("%s: Unable to create ION client\n", __func__);
+		video_client = NULL;
+	}
 	return video_client;
 }
 
@@ -527,20 +478,12 @@ u32 res_trk_power_down(void)
 
 u32 res_trk_get_max_perf_level(u32 *pn_max_perf_lvl)
 {
-	bool turbo_supported =
-		!resource_context.vidc_platform_data->disable_turbo;
-
 	if (!pn_max_perf_lvl) {
 		VCDRES_MSG_ERROR("%s(): pn_max_perf_lvl is NULL\n",
 			__func__);
 		return false;
 	}
-	if (turbo_supported)
-		*pn_max_perf_lvl = RESTRK_1080P_TURBO_PERF_LEVEL;
-	else
-		*pn_max_perf_lvl = RESTRK_1080P_MAX_PERF_LEVEL;
-	VCDRES_MSG_MED("%s: %u", __func__, (u32)*pn_max_perf_lvl);
-
+	*pn_max_perf_lvl = RESTRK_1080P_MAX_PERF_LEVEL;
 	return true;
 }
 
@@ -608,14 +551,16 @@ u32 res_trk_set_perf_level(u32 req_perf_lvl, u32 *pn_set_perf_lvl,
 			__func__, dev_ctxt);
 	}
 
-	if (dev_ctxt->reqd_perf_lvl + dev_ctxt->curr_perf_lvl == 0) {
-		if (turbo_supported)
-			req_perf_lvl = RESTRK_1080P_TURBO_PERF_LEVEL;
-		else
-			req_perf_lvl = RESTRK_1080P_MAX_PERF_LEVEL;
-		VCDRES_MSG_MED("Set initial perf level to %u",
-			req_perf_lvl);
+#ifdef CONFIG_MSM_BUS_SCALING
+	if (!res_trk_update_bus_perf_level(dev_ctxt, req_perf_lvl) < 0) {
+		VCDRES_MSG_ERROR("%s(): update buf perf level failed\n",
+			__func__);
+		return false;
 	}
+
+#endif
+	if (dev_ctxt->reqd_perf_lvl + dev_ctxt->curr_perf_lvl == 0)
+		req_perf_lvl = RESTRK_1080P_MAX_PERF_LEVEL;
 
 	if (req_perf_lvl <= RESTRK_1080P_VGA_PERF_LEVEL) {
 		vidc_freq = vidc_clk_table[0];
@@ -630,6 +575,7 @@ u32 res_trk_set_perf_level(u32 req_perf_lvl, u32 *pn_set_perf_lvl,
 		vidc_freq = vidc_clk_table[4];
 		*pn_set_perf_lvl = RESTRK_1080P_TURBO_PERF_LEVEL;
 	}
+
 	if (!turbo_supported &&
 		 *pn_set_perf_lvl == RESTRK_1080P_TURBO_PERF_LEVEL) {
 		vidc_freq = vidc_clk_table[2];
@@ -637,24 +583,14 @@ u32 res_trk_set_perf_level(u32 req_perf_lvl, u32 *pn_set_perf_lvl,
 	}
 
 	resource_context.perf_level = *pn_set_perf_lvl;
-	VCDRES_MSG_HIGH("VIDC: vidc_freq = %u, req_perf_lvl = %u, "\
-		"set_perf_lvl = %u\n", vidc_freq, req_perf_lvl,
-		(u32)*pn_set_perf_lvl);
-#ifdef CONFIG_MSM_BUS_SCALING
-	if (!res_trk_update_bus_perf_level(dev_ctxt, req_perf_lvl) < 0) {
-		VCDRES_MSG_ERROR("%s(): update buf perf level failed\n",
-			__func__);
-		return false;
-	}
-#endif
+	VCDRES_MSG_MED("VIDC: vidc_freq = %u, req_perf_lvl = %u\n",
+		vidc_freq, req_perf_lvl);
 #ifdef USE_RES_TRACKER
     if (req_perf_lvl != RESTRK_1080P_MIN_PERF_LEVEL) {
 		VCDRES_MSG_MED("%s(): Setting vidc freq to %u\n",
 			__func__, vidc_freq);
 		if (!res_trk_sel_clk_rate(vidc_freq)) {
 			if (vidc_freq == vidc_clk_table[4]) {
-				VCDRES_MSG_MED("%s(): Setting vidc freq "\
-					"to %u\n", __func__, (u32)vidc_clk_table[3]);
 				if (res_trk_sel_clk_rate(vidc_clk_table[3]))
 					goto ret;
 			}
@@ -753,9 +689,6 @@ void res_trk_init(struct device *device, u32 irq)
 			resource_context.vidc_platform_data->disable_dmx;
 			resource_context.disable_fullhd =
 			resource_context.vidc_platform_data->disable_fullhd;
-			resource_context.enable_sec_metadata =
-			resource_context.vidc_platform_data->
-				enable_sec_metadata;
 #ifdef CONFIG_MSM_BUS_SCALING
 			resource_context.vidc_bus_client_pdata =
 			resource_context.vidc_platform_data->
@@ -867,9 +800,9 @@ unsigned int res_trk_get_ion_flags(void)
 	if (resource_context.vidc_platform_data->enable_ion) {
 		if (res_trk_check_for_sec_session()) {
 			if (resource_context.res_mem_type != DDL_FW_MEM)
-				flags |= ION_SECURE;
+				flags |= ION_FLAG_SECURE;
 			else if (res_trk_is_cp_enabled())
-				flags |= ION_SECURE;
+				flags |= ION_FLAG_SECURE;
 		}
 	}
 	return flags;
@@ -913,10 +846,6 @@ void res_trk_set_mem_type(enum ddl_mem_area mem_type)
 u32 res_trk_get_disable_fullhd(void)
 {
 	return resource_context.disable_fullhd;
-}
-u32 res_trk_get_enable_sec_metadata(void)
-{
-	return resource_context.enable_sec_metadata;
 }
 
 int res_trk_enable_iommu_clocks(void)
@@ -1029,9 +958,9 @@ int res_trk_open_secure_session()
 	mutex_unlock(&resource_context.secure_lock);
 	return 0;
 unsecure_cmd_heap:
-	msm_ion_unsecure_heap(ION_HEAP(resource_context.cmd_mem_type));
-unsecure_memtype_heap:
 	msm_ion_unsecure_heap(ION_HEAP(resource_context.memtype));
+unsecure_memtype_heap:
+	msm_ion_unsecure_heap(ION_HEAP(resource_context.cmd_mem_type));
 disable_iommu_clks:
 	res_trk_disable_iommu_clocks();
 error_open:
@@ -1088,28 +1017,18 @@ u32 get_res_trk_perf_level(enum vcd_perf_level perf_level)
 		VCD_MSG_ERROR("Invalid perf level: %d\n", perf_level);
 		res_trk_perf_level = -EINVAL;
 	}
-	VCDRES_MSG_MED("%s: res_trk_perf_level = %u", __func__,
-		res_trk_perf_level);
 	return res_trk_perf_level;
 }
 
 u32 res_trk_estimate_perf_level(u32 pn_perf_lvl)
 {
-	bool turbo_supported =
-		!resource_context.vidc_platform_data->disable_turbo;
-
-	VCDRES_MSG_MED("%s(): pn_perf_lvl = %d, turbo support = %d",
-		__func__, pn_perf_lvl, turbo_supported);
+	VCDRES_MSG_MED("%s(), req_perf_lvl = %d", __func__, pn_perf_lvl);
 	if ((pn_perf_lvl >= RESTRK_1080P_VGA_PERF_LEVEL) &&
 		(pn_perf_lvl < RESTRK_1080P_720P_PERF_LEVEL)) {
 		return RESTRK_1080P_720P_PERF_LEVEL;
 	} else if ((pn_perf_lvl >= RESTRK_1080P_720P_PERF_LEVEL) &&
 			(pn_perf_lvl < RESTRK_1080P_MAX_PERF_LEVEL)) {
 		return RESTRK_1080P_MAX_PERF_LEVEL;
-	} else if ((pn_perf_lvl >= RESTRK_1080P_MAX_PERF_LEVEL) &&
-			(pn_perf_lvl < RESTRK_1080P_TURBO_PERF_LEVEL) &&
-			turbo_supported) {
-		return RESTRK_1080P_TURBO_PERF_LEVEL;
 	} else {
 		return pn_perf_lvl;
 	}

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,7 +14,6 @@
 #ifndef _VCD_DDL_H_
 #define _VCD_DDL_H_
 
-#include <mach/msm_subsystem_map.h>
 #include "vcd_ddl_api.h"
 #include "vcd_ddl_core.h"
 #include "vcd_ddl_utils.h"
@@ -100,8 +99,8 @@
 
 #define MDP_MIN_TILE_HEIGHT			96
 
-#define DDL_MAX_NUM_LTR_FRAMES      2
-#define DDL_LTR_FRAME_START_ID      1
+#define DDL_MAX_NUM_LTR_FRAMES                  2
+#define DDL_LTR_FRAME_START_ID                  1
 
 enum ddl_mem_area {
 	DDL_FW_MEM	= 0x0,
@@ -260,13 +259,16 @@ struct ddl_mp2_datadumpenabletype {
 	u32 seqdisp_extdump_enable;
 	u32 seq_extdump_enable;
 };
+
+
 struct ddl_ltrlist {
 	bool ltr_in_use;
 	u32 ltr_id;
 };
+
 struct ddl_ltr_encoding_type {
-	struct vcd_property_ltrmode_type ltrmode;
-	struct vcd_property_ltruse_type failed_use_cmd;
+	struct vcd_property_ltrmode_type  ltrmode;
+	struct vcd_property_ltruse_type  failed_use_cmd;
 	struct ddl_ltrlist *ltr_list;
 	u32 ltr_count;
 	u32 ltr_period;
@@ -283,16 +285,17 @@ struct ddl_ltr_encoding_type {
 	bool use_ltr_reqd;
 	bool store_for_intraframe_insertion;
 	bool pending_chg_ltr_useframes; /* True if
-		* corresponding driver context of
-		* out_frame_cnt_to_use_this_ltr
-		* is pending to be changed with
-		* client settings
-		*/
+		 * corresponding driver context of
+		 * out_frame_cnt_to_use_this_ltr
+		 * is pending to be changed with
+		 * client settings
+		 */
 	bool store_ltr0;
 	bool store_ltr1;
 	bool use_ltr0;
 	bool use_ltr1;
 };
+
 struct ddl_encoder_data{
 	struct ddl_codec_data_hdr   hdr;
 	struct vcd_property_codec   codec;
@@ -326,7 +329,8 @@ struct ddl_encoder_data{
 	struct ddl_enc_buffers  hw_bufs;
 	struct ddl_yuv_buffer_size  input_buf_size;
 	struct vidc_1080p_enc_frame_info enc_frame_info;
-	struct ddl_ltr_encoding_type ltr_control;
+	struct ddl_ltr_encoding_type  ltr_control;
+	u32  plusptype_enable;
 	u32  meta_data_enable_flag;
 	u32  suffix;
 	u32  meta_data_offset;
@@ -342,12 +346,11 @@ struct ddl_encoder_data{
 	u32  num_references_for_p_frame;
 	u32  closed_gop;
 	u32  num_slices_comp;
-	bool intra_period_changed;
+	bool  intra_period_changed;
 	struct vcd_property_slice_delivery_info slice_delivery_info;
 	struct ddl_batch_frame_data batch_frame;
 	u32 avc_delimiter_enable;
 	u32 vui_timinginfo_enable;
-	u32 bitstream_restrict_enable;
 };
 struct ddl_decoder_data {
 	struct ddl_codec_data_hdr  hdr;
@@ -549,7 +552,7 @@ void ddl_set_vidc_timeout(struct ddl_client_context *ddl);
 #ifdef DDL_BUF_LOG
 void ddl_list_buffers(struct ddl_client_context *ddl);
 #endif
-#ifdef DDL_MSG_LOG
+#if DDL_MSG_LOG
 s8 *ddl_get_state_string(enum ddl_client_state client_state);
 #endif
 extern unsigned char *vidc_video_codec_fw;
@@ -579,4 +582,5 @@ s32 ddl_use_ltr_from_list(struct ddl_ltr_encoding_type *ltr_control,
 s32 ddl_allocate_ltr_list(struct ddl_ltr_encoding_type *ltr_control);
 s32 ddl_free_ltr_list(struct ddl_ltr_encoding_type *ltr_control);
 void ddl_print_ltr_list(struct ddl_ltr_encoding_type *ltr_control);
+
 #endif
