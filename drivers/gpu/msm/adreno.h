@@ -30,17 +30,21 @@
 #define ADRENO_CHIPID_MINOR(_id) (((_id) >> 8) & 0xFF)
 #define ADRENO_CHIPID_PATCH(_id) ((_id) & 0xFF)
 
+/* Flags to control command packet settings */
 #define KGSL_CMD_FLAGS_NONE             0x00000000
 #define KGSL_CMD_FLAGS_PMODE		0x00000001
 #define KGSL_CMD_FLAGS_INTERNAL_ISSUE	0x00000002
+#define KGSL_CMD_FLAGS_PWRON_FIXUP      0x00000008
 #define KGSL_CMD_FLAGS_EOF	        0x00000100
 
+/* Command identifiers */
 #define KGSL_CONTEXT_TO_MEM_IDENTIFIER	0x2EADBEEF
 #define KGSL_CMD_IDENTIFIER		0x2EEDFACE
 #define KGSL_START_OF_IB_IDENTIFIER	0x2EADEABE
 #define KGSL_END_OF_IB_IDENTIFIER	0x2ABEDEAD
 #define KGSL_END_OF_FRAME_IDENTIFIER	0x2E0F2E0F
 #define KGSL_NOP_IB_IDENTIFIER	        0x20F20F20
+#define KGSL_PWRON_FIXUP_IDENTIFIER	0x2AFAFAFA
 
 #ifdef CONFIG_MSM_SCM
 #define ADRENO_DEFAULT_PWRSCALE_POLICY  (&kgsl_pwrscale_policy_tz)
@@ -52,10 +56,13 @@
 
 void adreno_debugfs_init(struct kgsl_device *device);
 
-#define ADRENO_ISTORE_START 0x5000 
+#define ADRENO_ISTORE_START 0x5000 /* Istore offset */
 
 #define ADRENO_NUM_CTX_SWITCH_ALLOWED_BEFORE_DRAW	50
 
+/* One cannot wait forever for the core to idle, so set an upper limit to the
+ * amount of time to wait for the core to go idle
+ */
 
 #define ADRENO_IDLE_TIMEOUT (20 * 1000)
 
@@ -74,7 +81,8 @@ enum adreno_gpurev {
 struct adreno_gpudev;
 
 struct adreno_device {
-	struct kgsl_device dev;    
+	struct kgsl_device dev;    /* Must be first field in this struct */
+	unsigned long priv;
 	unsigned int chip_id;
 	enum adreno_gpurev gpurev;
 	unsigned long gmem_base;
@@ -106,16 +114,36 @@ struct adreno_device {
 	unsigned int gpulist_index;
 	struct ocmem_buf *ocmem_hdl;
 	unsigned int ocmem_base;
+	struct kgsl_memdesc on_resume_cmd;
+	unsigned int on_resume_ib[3];
+	bool on_resume_issueib;
+	struct kgsl_memdesc pwron_fixup;
+	unsigned int pwron_fixup_dwords;
+};
+
+/**
+ * enum adreno_device_flags - Private flags for the adreno_device
+ * @ADRENO_DEVICE_PWRON - Set during init after a power collapse
+ * @ADRENO_DEVICE_PWRON_FIXUP - Set if the target requires the shader fixup
+ * after power collapse
+ */
+enum adreno_device_flags {
+	ADRENO_DEVICE_PWRON = 0,
+	ADRENO_DEVICE_PWRON_FIXUP = 1,
 };
 
 struct adreno_gpudev {
+	/*
+	 * These registers are in a different location on A3XX,  so define
+	 * them in the structure and use them as variables.
+	 */
 	unsigned int reg_rbbm_status;
 	unsigned int reg_cp_pfp_ucode_data;
 	unsigned int reg_cp_pfp_ucode_addr;
-	
+	/* keeps track of when we need to execute the draw workaround code */
 	int ctx_switches_since_last_draw;
 
-	
+	/* GPU specific function hooks */
 	int (*ctxt_create)(struct adreno_device *, struct adreno_context *);
 	void (*ctxt_save)(struct adreno_device *, struct adreno_context *);
 	void (*ctxt_restore)(struct adreno_device *, struct adreno_context *);
@@ -130,6 +158,28 @@ struct adreno_gpudev {
 	unsigned int (*busy_cycles)(struct adreno_device *);
 };
 
+/*
+ * struct adreno_ft_data - Structure that contains all information to
+ * perform gpu fault tolerance
+ * @ib1 - IB1 that the GPU was executing when hang happened
+ * @context_id - Context which caused the hang
+ * @global_eop - eoptimestamp at time of hang
+ * @rb_buffer - Buffer that holds the commands from good contexts
+ * @rb_size - Number of valid dwords in rb_buffer
+ * @bad_rb_buffer - Buffer that holds commands from the hanging context
+ * bad_rb_size - Number of valid dwords in bad_rb_buffer
+ * @good_rb_buffer - Buffer that holds commands from good contexts
+ * good_rb_size - Number of valid dwords in good_rb_buffer
+ * @last_valid_ctx_id - The last context from which commands were placed in
+ * ringbuffer before the GPU hung
+ * @step - Current fault tolerance step being executed
+ * @err_code - Fault tolerance error code
+ * @fault - Indicates whether the hang was caused due to a pagefault
+ * @start_of_replay_cmds - Offset in ringbuffer from where commands can be
+ * replayed during fault tolerance
+ * @replay_for_snapshot - Offset in ringbuffer where IB's can be saved for
+ * replaying with snapshot
+ */
 struct adreno_ft_data {
 	unsigned int ib1;
 	unsigned int context_id;
@@ -148,9 +198,26 @@ struct adreno_ft_data {
 	unsigned int replay_for_snapshot;
 };
 
+/* Fault Tolerance policy flags */
+#define  KGSL_FT_DISABLE                  BIT(0)
+#define  KGSL_FT_REPLAY                   BIT(1)
+#define  KGSL_FT_SKIPIB                   BIT(2)
+#define  KGSL_FT_SKIPFRAME                BIT(3)
+#define  KGSL_FT_TEMP_DISABLE             BIT(4)
+#define  KGSL_FT_DEFAULT_POLICY           (KGSL_FT_REPLAY + KGSL_FT_SKIPIB)
+
+/* Pagefault policy flags */
+#define KGSL_FT_PAGEFAULT_INT_ENABLE         BIT(0)
+#define KGSL_FT_PAGEFAULT_GPUHALT_ENABLE     BIT(1)
+#define KGSL_FT_PAGEFAULT_LOG_ONE_PER_PAGE   BIT(2)
+#define KGSL_FT_PAGEFAULT_LOG_ONE_PER_INT    BIT(3)
+#define KGSL_FT_PAGEFAULT_DEFAULT_POLICY     (KGSL_FT_PAGEFAULT_INT_ENABLE + \
+					KGSL_FT_PAGEFAULT_GPUHALT_ENABLE)
+
 extern struct adreno_gpudev adreno_a2xx_gpudev;
 extern struct adreno_gpudev adreno_a3xx_gpudev;
 
+/* A2XX register sets defined in adreno_a2xx.c */
 extern const unsigned int a200_registers[];
 extern const unsigned int a220_registers[];
 extern const unsigned int a225_registers[];
@@ -158,6 +225,7 @@ extern const unsigned int a200_registers_count;
 extern const unsigned int a220_registers_count;
 extern const unsigned int a225_registers_count;
 
+/* A3XX register set defined in adreno_a3xx.c */
 extern const unsigned int a3xx_registers[];
 extern const unsigned int a3xx_registers_count;
 
@@ -200,6 +268,11 @@ void adreno_dump_rb(struct kgsl_device *device, const void *buf,
 
 unsigned int adreno_ft_detect(struct kgsl_device *device,
 						unsigned int *prev_reg_val);
+
+int adreno_ft_init_sysfs(struct kgsl_device *device);
+void adreno_ft_uninit_sysfs(struct kgsl_device *device);
+
+int adreno_a3xx_pwron_fixup_init(struct adreno_device *adreno_dev);
 
 static inline int adreno_is_a200(struct adreno_device *adreno_dev)
 {
@@ -268,9 +341,22 @@ static inline int adreno_rb_ctxtswitch(unsigned int *cmd)
 		cmd[1] == KGSL_CONTEXT_TO_MEM_IDENTIFIER);
 }
 
+/**
+ * adreno_encode_istore_size - encode istore size in CP format
+ * @adreno_dev - The 3D device.
+ *
+ * Encode the istore size into the format expected that the
+ * CP_SET_SHADER_BASES and CP_ME_INIT commands:
+ * bits 31:29 - istore size as encoded by this function
+ * bits 27:16 - vertex shader start offset in instructions
+ * bits 11:0 - pixel shader start offset in instructions.
+ */
 static inline int adreno_encode_istore_size(struct adreno_device *adreno_dev)
 {
 	unsigned int size;
+	/* in a225 the CP microcode multiplies the encoded
+	 * value by 3 while decoding.
+	 */
 	if (adreno_is_a225(adreno_dev))
 		size = adreno_dev->istore_size/3;
 	else
@@ -282,6 +368,10 @@ static inline int adreno_encode_istore_size(struct adreno_device *adreno_dev)
 static inline int __adreno_add_idle_indirect_cmds(unsigned int *cmds,
 						unsigned int nop_gpuaddr)
 {
+	/* Adding an indirect buffer ensures that the prefetch stalls until
+	 * the commands in indirect buffer have completed. We need to stall
+	 * prefetch with a nop indirect buffer when updating pagetables
+	 * because it provides stabler synchronization */
 	*cmds++ = CP_HDR_INDIRECT_BUFFER_PFD;
 	*cmds++ = nop_gpuaddr;
 	*cmds++ = 2;
@@ -314,6 +404,14 @@ static inline int adreno_add_bank_change_cmds(unsigned int *cmds,
 	return cmds - start;
 }
 
+/*
+ * adreno_read_cmds - Add pm4 packets to perform read
+ * @device - Pointer to device structure
+ * @cmds - Pointer to memory where read commands need to be added
+ * @addr - gpu address of the read
+ * @val - The GPU will wait until the data at address addr becomes
+ * equal to value
+ */
 static inline int adreno_add_read_cmds(struct kgsl_device *device,
 				unsigned int *cmds, unsigned int addr,
 				unsigned int val, unsigned int nop_gpuaddr)
@@ -321,7 +419,7 @@ static inline int adreno_add_read_cmds(struct kgsl_device *device,
 	unsigned int *start = cmds;
 
 	*cmds++ = cp_type3_packet(CP_WAIT_REG_MEM, 5);
-	
+	/* MEM SPACE = memory, FUNCTION = equals */
 	*cmds++ = 0x13;
 	*cmds++ = addr;
 	*cmds++ = val;
@@ -331,6 +429,11 @@ static inline int adreno_add_read_cmds(struct kgsl_device *device,
 	return cmds - start;
 }
 
+/*
+ * adreno_idle_cmds - Add pm4 packets for GPU idle
+ * @adreno_dev - Pointer to device structure
+ * @cmds - Pointer to memory where idle commands need to be added
+ */
 static inline int adreno_add_idle_cmds(struct adreno_device *adreno_dev,
 							unsigned int *cmds)
 {
@@ -348,4 +451,4 @@ static inline int adreno_add_idle_cmds(struct adreno_device *adreno_dev,
 	return cmds - start;
 }
 
-#endif 
+#endif /*__ADRENO_H */

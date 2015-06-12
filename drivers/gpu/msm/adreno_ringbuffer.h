@@ -13,10 +13,15 @@
 #ifndef __ADRENO_RINGBUFFER_H
 #define __ADRENO_RINGBUFFER_H
 
+/*
+ * Adreno ringbuffer sizes in bytes - these are converted to
+ * the appropriate log2 values in the code
+ */
 
 #define KGSL_RB_SIZE (32 * 1024)
 #define KGSL_RB_BLKSIZE 16
 
+/* CP timestamp register */
 #define	REG_CP_TIMESTAMP		 REG_SCRATCH_REG0
 
 
@@ -45,11 +50,11 @@ struct adreno_ringbuffer {
 	struct kgsl_memdesc memptrs_desc;
 	struct kgsl_rbmemptrs *memptrs;
 
-	
+	/*ringbuffer size */
 	unsigned int sizedwords;
 
-	unsigned int wptr; 
-	unsigned int rptr; 
+	unsigned int wptr; /* write pointer offset in dwords from baseaddr */
+	unsigned int rptr; /* read pointer offset in dwords from baseaddr */
 
 	unsigned int timestamp[KGSL_MEMSTORE_MAX];
 };
@@ -64,16 +69,23 @@ struct adreno_ringbuffer {
 		gpuaddr += sizeof(uint); \
 	} while (0)
 
+/* enable timestamp (...scratch0) memory shadowing */
 #define GSL_RB_MEMPTRS_SCRATCH_MASK 0x1
 
-#define GSL_RB_CNTL_NO_UPDATE 0x0 
+/* mem rptr */
+#define GSL_RB_CNTL_NO_UPDATE 0x0 /* enable */
 #define GSL_RB_GET_READPTR(rb, data) \
 	do { \
 		*(data) = rb->memptrs->rptr; \
 	} while (0)
 
-#define GSL_RB_CNTL_POLL_EN 0x0 
+#define GSL_RB_CNTL_POLL_EN 0x0 /* disable */
 
+/*
+ * protected mode error checking below register address 0x800
+ * note: if CP_INTERRUPT packet is used then checking needs
+ * to change to below register address 0x7C8
+ */
 #define GSL_RB_PROTECTED_MODE_CONTROL		0x200001F2
 
 int adreno_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
@@ -125,16 +137,18 @@ static inline int adreno_ringbuffer_count(struct adreno_ringbuffer *rb,
 	return rb->wptr + rb->sizedwords - rptr;
 }
 
+/* Increment a value by 4 bytes with wrap-around based on size */
 static inline unsigned int adreno_ringbuffer_inc_wrapped(unsigned int val,
 							unsigned int size)
 {
 	return (val + sizeof(unsigned int)) % size;
 }
 
+/* Decrement a value by 4 bytes with wrap-around based on size */
 static inline unsigned int adreno_ringbuffer_dec_wrapped(unsigned int val,
 							unsigned int size)
 {
 	return (val + size - sizeof(unsigned int)) % size;
 }
 
-#endif  
+#endif  /* __ADRENO_RINGBUFFER_H */
