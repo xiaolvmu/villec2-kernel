@@ -536,7 +536,7 @@ void hdmi_phy_reset(void)
 	else
 		HDMI_OUTP(0x2D4, val & (~SW_RESET));
 
-	msleep(100);
+	msleep(1);
 
 	if (phy_reset_polarity == 0)
 		HDMI_OUTP(0x2D4, val & (~SW_RESET));
