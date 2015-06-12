@@ -85,31 +85,13 @@
 #define MSM_ION_ROTATOR_SIZE  MSM_PMEM_ADSP2_SIZE
 #define MSM_ION_MM_FW_SIZE    0x200000  
 #define MSM_ION_MM_SIZE       0x3D00000 
-#define MSM_ION_MFC_SIZE      0x100000  
-#define MSM_ION_WB_SIZE       0x2FD000  
+#define MSM_ION_MFC_SIZE      0x100000   
 
-#ifdef CONFIG_TZCOM
-#define MSM_ION_QSECOM_SIZE   MSM_PMEM_KERNEL_EBI1_SIZE
-#ifdef CONFIG_MSM_IOMMU
-#define MSM_ION_HEAP_NUM      9
-#else
-#define MSM_ION_HEAP_NUM      10
-#endif
-#else
-#ifdef CONFIG_MSM_IOMMU
-#define MSM_ION_HEAP_NUM      8
-#else
-#define MSM_ION_HEAP_NUM      9
-#endif
+#define MSM_ION_HEAP_NUM     6
 #endif
 
-#define MSM_ION_CAMERA_BASE   (0x40E00000)	
-#define MSM_ION_WB_BASE       (0x46400000)
+#define MSM_ION_CAMERA_BASE   (0x40E00000)
 #define MSM_ION_AUDIO_BASE    (0x7FB00000)
-
-#else 
-#define MSM_ION_HEAP_NUM      1
-#endif
 
 #define PHY_BASE_ADDR1  0x48000000
 #define SIZE_ADDR1      0x38000000

@@ -5065,11 +5065,6 @@ static struct ion_cp_heap_pdata cp_mfc_ion_pdata = {
 	.setup_region = setup_smi_region,
 };
 
-static struct ion_cp_heap_pdata cp_wb_ion_pdata = {
-	.permission_type = IPT_TYPE_MDP_WRITEBACK,
-	.align = PAGE_SIZE,
-};
-
 static struct ion_co_heap_pdata mm_fw_co_ion_pdata = {
 	.adjacent_mem_id = ION_CP_MM_HEAP_ID,
 	.align = SZ_128K,
@@ -5159,15 +5154,6 @@ struct ion_platform_heap msm8660_heaps[] = {
 			.size	= MSM_ION_CAMERA_SIZE,
 			.memory_type = ION_EBI_TYPE,
 			.extra_data = &co_ion_pdata,
-		},
-		{
-			.id	= ION_CP_WB_HEAP_ID,
-			.type	= ION_HEAP_TYPE_CP,
-			.name	= ION_WB_HEAP_NAME,
-			.base	= MSM_ION_WB_BASE,
-			.size	= MSM_ION_WB_SIZE,
-			.memory_type = ION_EBI_TYPE,
-			.extra_data = (void *) &cp_wb_ion_pdata,
 		},
 		{
 			.id	= ION_AUDIO_HEAP_ID,
@@ -9099,7 +9085,7 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.mdp_bus_scale_table = &mdp_bus_scale_pdata,
 #endif
 	.mdp_rev = MDP_REV_41,
-	.mem_hid = BIT(ION_CP_WB_HEAP_ID),
+	.mem_hid = BIT(ION_CP_MM_HEAP_ID),
 	.mdp_iommu_split_domain = 0,
  	.mdp_gamma = pyramid_mdp_gamma,
  	.mdp_gamma_cool = pyramid_mdp_gamma_cool,
