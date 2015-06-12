@@ -5331,14 +5331,11 @@ static void __init reserve_pmem_memory(void)
 #endif 
 }
 
-static void __init reserve_mdp_memory(void);
-
 static void __init msm8x60_calculate_reserve_sizes(void)
 {
 	size_pmem_devices();
 	reserve_pmem_memory();
 	reserve_ion_memory();
-	reserve_mdp_memory();
 }
 
 static int msm8x60_paddr_to_memtype(unsigned int paddr)
@@ -9104,16 +9101,9 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.mdp_rev = MDP_REV_41,
 	.mem_hid = BIT(ION_CP_WB_HEAP_ID),
 	.mdp_iommu_split_domain = 0,
+ 	.mdp_gamma = pyramid_mdp_gamma,
+ 	.mdp_gamma_cool = pyramid_mdp_gamma_cool,
 };
-
-static void __init reserve_mdp_memory(void)
-{
-	mdp_pdata.ov0_wb_size = MSM_FB_WRITEBACK_SIZE;
-#if defined(CONFIG_ANDROID_PMEM) && !defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
-	msm8x60_reserve_table[mdp_pdata.mem_hid].size +=
-		mdp_pdata.ov0_wb_size;
-#endif
-}
 
 #ifdef CONFIG_FB_MSM_TVOUT
 
