@@ -57,7 +57,7 @@ enum ipi_msg_type {
 
 static DECLARE_COMPLETION(cpu_running);
 
-int __cpu_up(unsigned int cpu)
+int __cpuinit __cpu_up(unsigned int cpu)
 {
 	struct cpuinfo_arm *ci = &per_cpu(cpu_data, cpu);
 	struct task_struct *idle = ci->idle;
@@ -167,11 +167,7 @@ void __ref cpu_die(void)
 }
 #endif 
 
-/*
- * Called by both boot and secondaries to move global data into
- * per-processor storage.
- */
-static void smp_store_cpu_info(unsigned int cpuid)
+static void __cpuinit smp_store_cpu_info(unsigned int cpuid)
 {
 	struct cpuinfo_arm *cpu_info = &per_cpu(cpu_data, cpuid);
 
@@ -180,11 +176,7 @@ static void smp_store_cpu_info(unsigned int cpuid)
 	store_cpu_topology(cpuid);
 }
 
-/*
- * This is the secondary CPU boot entry.  We're using this CPUs
- * idle thread stack, but a set of temporary page tables.
- */
-asmlinkage void secondary_start_kernel(void)
+asmlinkage void __cpuinit secondary_start_kernel(void)
 {
 	struct mm_struct *mm = &init_mm;
 	unsigned int cpu;
@@ -348,7 +340,7 @@ static void broadcast_timer_set_mode(enum clock_event_mode mode,
 {
 }
 
-static void broadcast_timer_setup(struct clock_event_device *evt)
+static void __cpuinit broadcast_timer_setup(struct clock_event_device *evt)
 {
 	evt->name	= "dummy_timer";
 	evt->features	= CLOCK_EVT_FEAT_ONESHOT |
@@ -374,7 +366,7 @@ int local_timer_register(struct local_timer_ops *ops)
 }
 #endif
 
-void percpu_timer_setup(void)
+void __cpuinit percpu_timer_setup(void)
 {
 	unsigned int cpu = smp_processor_id();
 	struct clock_event_device *evt = &per_cpu(percpu_clockevent, cpu);
