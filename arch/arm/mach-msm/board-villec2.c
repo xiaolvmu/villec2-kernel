@@ -9087,8 +9087,6 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.mdp_rev = MDP_REV_41,
 	.mem_hid = BIT(ION_CP_MM_HEAP_ID),
 	.mdp_iommu_split_domain = 0,
- 	.mdp_gamma = pyramid_mdp_gamma,
- 	.mdp_gamma_cool = pyramid_mdp_gamma_cool,
 };
 
 #ifdef CONFIG_FB_MSM_TVOUT
