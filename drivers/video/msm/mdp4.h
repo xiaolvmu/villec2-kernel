@@ -11,7 +11,20 @@
  * GNU General Public License for more details.
  *
  */
+static inline void mdp4_mddi_overlay_blt(struct msm_fb_data_type *mfd,
+					struct msmfb_overlay_blt *req)
+{
+	/* empty*/
+}
+static inline void mdp4_mddi_blt_dmap_busy_wait(struct msm_fb_data_type *mfd)
+{
+	/* empty */
+}
 
+static inline void mdp4_mddi_overlay_restore(void)
+{
+	/* empty */
+}
 #ifndef MDP4_H
 #define MDP4_H
 
@@ -663,14 +676,8 @@ static inline void mdp4_mddi_dma_busy_wait(struct msm_fb_data_type *mfd)
 {
 	/* empty */
 }
-static inline void mdp4_mddi_blt_dmap_busy_wait(struct msm_fb_data_type *mfd)
-{
-	/* empty */
-}
-static inline void mdp4_mddi_overlay_restore(void)
-{
-	/* empty */
-}
+
+
 static inline void mdp4_mddi_overlay_blt_start(struct msm_fb_data_type *mfd)
 {
 	/*empty*/
@@ -684,11 +691,7 @@ static inline void mdp4_mddi_overlay_blt_offset(struct msm_fb_data_type *mfd,
 {
 	/* empty */
 }
-static inline void mdp4_mddi_overlay_blt(struct msm_fb_data_type *mfd,
-					struct msmfb_overlay_blt *req)
-{
-	/* empty*/
-}
+
 #endif
 
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
