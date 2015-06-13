@@ -24,18 +24,10 @@ obj-y += mdp_ppp_v20.o
 endif
 endif
 
-ifeq ($(CONFIG_FB_MSM_OVERLAY),y)
 obj-y += mdp4_overlay.o
 obj-y += mdp4_overlay_lcdc.o
-ifeq ($(CONFIG_FB_MSM_MIPI_DSI),y)
 obj-y += mdp4_overlay_dsi_video.o
 obj-y += mdp4_overlay_dsi_cmd.o
-else
-obj-y += mdp4_overlay_mddi.o
-endif
-else
-obj-y += mdp_dma_lcdc.o
-endif
 
 obj-$(CONFIG_FB_MSM_MDP303) += mdp_dma_dsi_video.o
 
