@@ -738,12 +738,6 @@ static inline int mdp4_dsi_overlay_blt_stop(struct msm_fb_data_type *mfd)
 {
 	return -ENODEV;
 }
-static inline void mdp4_dsi_video_blt_start(struct msm_fb_data_type *mfd)
-{
-}
-static inline void mdp4_dsi_video_blt_stop(struct msm_fb_data_type *mfd)
-{
-}
 static inline void mdp4_dsi_overlay_blt(
 	struct msm_fb_data_type *mfd, struct msmfb_overlay_blt *req)
 {
@@ -752,25 +746,6 @@ static inline int mdp4_dsi_overlay_blt_offset(
 	struct msm_fb_data_type *mfd, struct msmfb_overlay_blt *req)
 {
 	return -ENODEV;
-}
-static inline void mdp4_dsi_video_overlay_blt(
-	struct msm_fb_data_type *mfd, struct msmfb_overlay_blt *req)
-{
-}
-static inline void mdp4_dsi_cmd_overlay_blt(
-	struct msm_fb_data_type *mfd, struct msmfb_overlay_blt *req)
-{
-}
-static inline void mdp4_dsi_video_base_swap(int cndx,
-			struct mdp4_overlay_pipe *pipe)
-{
-	/* empty */
-}
-static inline void mdp4_dsi_cmd_blt_start(struct msm_fb_data_type *mfd)
-{
-}
-static inline void mdp4_dsi_cmd_blt_stop(struct msm_fb_data_type *mfd)
-{
 }
 #endif  /* CONFIG_FB_MSM_MIPI_DSI */
 
@@ -823,60 +798,6 @@ void mdp4_dsi_cmd_del_timer(void);
 #endif
 #else  /* CONFIG_FB_MSM_MIPI_DSI */
 
-static inline int mdp4_dsi_cmd_on(struct platform_device *pdev)
-{
-	return 0;
-}
-static inline int mdp4_dsi_cmd_off(struct platform_device *pdev)
-{
-	return 0;
-}
-static inline int mdp4_dsi_video_on(struct platform_device *pdev)
-{
-	return 0;
-}
-static inline int mdp4_dsi_video_off(struct platform_device *pdev)
-{
-	return 0;
-}
-static inline void mdp4_primary_vsync_dsi_video(void)
-{
-}
-static inline void mdp4_dsi_cmd_base_swap(int cndx,
-	struct mdp4_overlay_pipe *pipe)
-{
-}
-static inline void mdp4_dsi_cmd_wait4vsync(int cndx)
-{
-}
-static inline void mdp4_dsi_video_wait4vsync(int cndx)
-{
-}
-static inline void mdp4_dsi_cmd_pipe_queue(int cndx,
-			struct mdp4_overlay_pipe *pipe)
-{
-}
-static inline void mdp4_dsi_video_pipe_queue(int cndx,
-			struct mdp4_overlay_pipe *pipe)
-{
-}
-static inline void mdp4_dsi_cmd_vsync_ctrl(struct fb_info *info,
-				int enable)
-{
-}
-static inline void mdp4_dsi_video_vsync_ctrl(struct fb_info *info,
-				int enable)
-{
-}
-
-static inline void mdp4_overlay_dsi_video_start(void)
-{
-	/* empty */
-}
-
-static int mdp4_dsi_video_splash_done(void)
-{
-}
 #endif /* CONFIG_FB_MSM_MIPI_DSI */
 
 void mdp4_dsi_cmd_kickoff_ui(struct msm_fb_data_type *mfd,
