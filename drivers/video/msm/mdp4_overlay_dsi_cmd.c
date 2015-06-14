@@ -375,7 +375,6 @@ int mdp4_dsi_cmd_pipe_commit(void)
 	spin_unlock_irqrestore(&vctrl->spin_lock, flags);
 
 	mdp4_stat.overlay_commit[pipe->mixer_num]++;
-	if (wait)
 		mdp4_dsi_cmd_wait4vsync(0);
 	return cnt;
 }

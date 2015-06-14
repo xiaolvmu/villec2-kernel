@@ -3073,25 +3073,6 @@ static int msmfb_overlay_unset(struct fb_info *info, unsigned long *argp)
 	return mdp4_overlay_unset(info, ndx);
 }
 
-static int msmfb_overlay_wait4vsync(struct fb_info *info, void __user *argp)
-{
-	int ret;
-	long long vtime;
-
-	ret = mdp4_overlay_wait4vsync(info, &vtime);
-	if (ret) {
-		pr_err("%s: ioctl failed\n", __func__);
-		return ret;
-	}
-
-	if (copy_to_user(argp, &vtime, sizeof(vtime))) {
-		pr_err("%s: copy2user failed\n", __func__);
-		return -EFAULT;
-	}
-
-	return 0;
-}
-
 static int msmfb_overlay_vsync_ctrl(struct fb_info *info, void __user *argp)
 {
 	int ret;
@@ -3511,9 +3492,6 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 
 	switch (cmd) {
 #ifdef CONFIG_FB_MSM_OVERLAY
-	case FBIO_WAITFORVSYNC:
-		ret = msmfb_overlay_wait4vsync(info, argp);
-		break;
 	case MSMFB_OVERLAY_VSYNC_CTRL:
 		ret = msmfb_overlay_vsync_ctrl(info, argp);
 		break;

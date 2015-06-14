@@ -300,7 +300,7 @@ static void mdp4_lcdc_vsync_irq_ctrl(int cndx, int enable)
 
 void mdp4_lcdc_vsync_ctrl(struct fb_info *info, int enable)
 {
-	struct vsycn_ctrl *vctrl;
+	struct vsync_ctrl *vctrl;
 	int cndx = 0;
 
 	vctrl = &vsync_ctrl_db[cndx];

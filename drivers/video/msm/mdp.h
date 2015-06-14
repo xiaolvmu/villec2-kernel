@@ -96,6 +96,18 @@ extern struct mdp_ccs mdp_ccs_yuv2rgb ;
 extern struct mdp_ccs mdp_ccs_rgb2yuv ;
 extern unsigned char hdmi_prim_display;
 
+struct vsync_ctrl {
+	ktime_t vsync_time;
+	struct device *dev;
+	struct work_struct vsync_work;
+	int vsync_irq_enabled;
+	int disabled_clocks;
+	struct completion vsync_wait;
+	atomic_t suspend;
+	atomic_t vsync_resume;
+	int sysfs_created;
+};
+
 typedef struct mdpImg_ {
 	uint32 imgType;		
 	uint32 *bmy_addr;	
