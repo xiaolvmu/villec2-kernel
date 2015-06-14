@@ -19,6 +19,7 @@
 #include "kgsl_mmu.h"
 #include <linux/slab.h>
 #include <linux/kmemleak.h>
+#include <linux/sched.h>
 
 #include "kgsl_log.h"
 
@@ -31,10 +32,19 @@ struct kgsl_process_private;
 
 extern struct kgsl_memdesc_ops kgsl_page_alloc_ops;
 
+int kgsl_sharedmem_ion_alloc(struct kgsl_memdesc *memdesc,
+				struct kgsl_pagetable *pagetable, size_t size);
+
+int kgsl_sharedmem_ion_alloc_user(struct kgsl_memdesc *memdesc,
+				struct kgsl_process_private *private,
+				struct kgsl_pagetable *pagetable,
+				size_t size);
+
 int kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
-			   struct kgsl_pagetable *pagetable, size_t size);
+				struct kgsl_pagetable *pagetable, size_t size);
 
 int kgsl_sharedmem_page_alloc_user(struct kgsl_memdesc *memdesc,
+				struct kgsl_process_private *private,
 				struct kgsl_pagetable *pagetable,
 				size_t size);
 
@@ -68,25 +78,15 @@ void kgsl_process_init_sysfs(struct kgsl_process_private *private);
 void kgsl_process_uninit_sysfs(struct kgsl_process_private *private);
 
 int kgsl_sharedmem_init_sysfs(void);
+void kgsl_sharedmem_init_ion(void);
 void kgsl_sharedmem_uninit_sysfs(void);
 
-/*
- * kgsl_memdesc_get_align - Get alignment flags from a memdesc
- * @memdesc - the memdesc
- *
- * Returns the alignment requested, as power of 2 exponent.
- */
 static inline int
 kgsl_memdesc_get_align(const struct kgsl_memdesc *memdesc)
 {
 	return (memdesc->flags & KGSL_MEMALIGN_MASK) >> KGSL_MEMALIGN_SHIFT;
 }
 
-/*
- * kgsl_memdesc_set_align - Set alignment flags of a memdesc
- * @memdesc - the memdesc
- * @align - alignment requested, as a power of 2 exponent.
- */
 static inline int
 kgsl_memdesc_set_align(struct kgsl_memdesc *memdesc, unsigned int align)
 {
@@ -102,10 +102,6 @@ kgsl_memdesc_set_align(struct kgsl_memdesc *memdesc, unsigned int align)
 
 static inline unsigned int kgsl_get_sg_pa(struct scatterlist *sg)
 {
-	/*
-	 * Try sg_dma_address first to support ion carveout
-	 * regions which do not work with sg_phys().
-	 */
 	unsigned int pa = sg_dma_address(sg);
 	if (pa == 0)
 		pa = sg_phys(sg);
@@ -116,18 +112,9 @@ int
 kgsl_sharedmem_map_vma(struct vm_area_struct *vma,
 			const struct kgsl_memdesc *memdesc);
 
-/*
- * For relatively small sglists, it is preferable to use kzalloc
- * rather than going down the vmalloc rat hole.  If the size of
- * the sglist is < PAGE_SIZE use kzalloc otherwise fallback to
- * vmalloc
- */
 
 static inline void *kgsl_sg_alloc(unsigned int sglen)
 {
-	if ((sglen == 0) || (sglen >= ULONG_MAX / sizeof(struct scatterlist)))
-		return NULL;
-
 	if ((sglen * sizeof(struct scatterlist)) <  PAGE_SIZE)
 		return kzalloc(sglen * sizeof(struct scatterlist), GFP_KERNEL);
 	else {
@@ -158,6 +145,7 @@ memdesc_sg_phys(struct kgsl_memdesc *memdesc,
 	kmemleak_not_leak(memdesc->sg);
 
 	memdesc->sglen = 1;
+	memdesc->sglen_alloc = 1;
 	sg_init_table(memdesc->sg, 1);
 	memdesc->sg[0].length = size;
 	memdesc->sg[0].offset = 0;
@@ -169,25 +157,42 @@ static inline int
 kgsl_allocate(struct kgsl_memdesc *memdesc,
 		struct kgsl_pagetable *pagetable, size_t size)
 {
+	int ret = 1;
+
 	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_NONE)
 		return kgsl_sharedmem_ebimem(memdesc, pagetable, size);
+
 	memdesc->flags |= (KGSL_MEMTYPE_KERNEL << KGSL_MEMTYPE_SHIFT);
-	return kgsl_sharedmem_page_alloc(memdesc, pagetable, size);
+	if (size >= SZ_4M)
+		ret = kgsl_sharedmem_ion_alloc(memdesc, pagetable, size);
+
+	if (ret)
+		return kgsl_sharedmem_page_alloc(memdesc, pagetable, size);
+
+	return ret;
 }
 
 static inline int
 kgsl_allocate_user(struct kgsl_memdesc *memdesc,
+		struct kgsl_process_private *private,
 		struct kgsl_pagetable *pagetable,
 		size_t size, unsigned int flags)
 {
-	int ret;
+	int ret = 1;
+	char task_comm[TASK_COMM_LEN];
 
 	memdesc->flags = flags;
 
 	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_NONE)
 		ret = kgsl_sharedmem_ebimem_user(memdesc, pagetable, size);
-	else
-		ret = kgsl_sharedmem_page_alloc_user(memdesc, pagetable, size);
+	else {
+		if (size >= SZ_4M)
+			ret = kgsl_sharedmem_ion_alloc_user(memdesc, private, pagetable, size);
+		else if ( size >= SZ_1M && strcmp("om.htc.launcher", get_task_comm(task_comm, current->group_leader)) == 0 )
+			ret = kgsl_sharedmem_ion_alloc_user(memdesc, private, pagetable, size);
+		if (ret)
+			ret = kgsl_sharedmem_page_alloc_user(memdesc, private, pagetable, size);
+	}
 
 	return ret;
 }
@@ -214,4 +219,4 @@ static inline int kgsl_sg_size(struct scatterlist *sg, int sglen)
 
 	return size;
 }
-#endif /* __KGSL_SHAREDMEM_H */
+#endif 

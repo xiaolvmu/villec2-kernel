@@ -28,9 +28,6 @@ struct kgsl_device;
 struct kgsl_ringbuffer_issueibcmds;
 struct kgsl_device_waittimestamp;
 
-/*
- * Tracepoint for kgsl issue ib commands
- */
 TRACE_EVENT(kgsl_issueibcmds,
 
 	TP_PROTO(struct kgsl_device *device,
@@ -78,9 +75,6 @@ TRACE_EVENT(kgsl_issueibcmds,
 	)
 );
 
-/*
- * Tracepoint for kgsl readtimestamp
- */
 TRACE_EVENT(kgsl_readtimestamp,
 
 	TP_PROTO(struct kgsl_device *device,
@@ -113,9 +107,6 @@ TRACE_EVENT(kgsl_readtimestamp,
 	)
 );
 
-/*
- * Tracepoint for kgsl waittimestamp entry
- */
 TRACE_EVENT(kgsl_waittimestamp_entry,
 
 	TP_PROTO(struct kgsl_device *device,
@@ -152,9 +143,6 @@ TRACE_EVENT(kgsl_waittimestamp_entry,
 	)
 );
 
-/*
- * Tracepoint for kgsl waittimestamp exit
- */
 TRACE_EVENT(kgsl_waittimestamp_exit,
 
 	TP_PROTO(struct kgsl_device *device, unsigned int curr_ts,
@@ -570,7 +558,6 @@ TRACE_EVENT(kgsl_fire_event,
 			__entry->id, __entry->ts, __entry->age)
 );
 
-#endif /* _KGSL_TRACE_H */
+#endif 
 
-/* This part must be outside protection */
 #include <trace/define_trace.h>

@@ -14,7 +14,6 @@
 #include "kgsl.h"
 #include "adreno.h"
 
-/* Instantiate tracepoints */
 #define CREATE_TRACE_POINTS
 #include "a3xx_reg.h"
 #include "adreno_a3xx_trace.h"
