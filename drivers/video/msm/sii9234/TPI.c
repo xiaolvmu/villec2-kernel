@@ -30,6 +30,7 @@
 static unsigned long rsenCheckTimeout = 0;
 static unsigned long deglitchTimeout = 0;
 static int rsenCount = 0;
+static int cbusErrCount = 0;
 static int WR_Dcap_Rdy_Int_Done = false;
 static bool IsEstablished = false;
 extern bool g_bProbe;
@@ -99,6 +100,8 @@ static  bool	HDCPSuccess;
 void    ProcessMhlStatus(bool, bool);
 #endif
 
+extern void sii9234_request_abort(void);
+
 #define	APPLY_PLL_RECOVERY
 
 #ifdef APPLY_PLL_RECOVERY
@@ -139,6 +142,7 @@ bool TPI_Init(void)
 {
 	fwPowerState = POWER_STATE_FIRST_INIT;
 	WR_Dcap_Rdy_Int_Done = false;
+	cbusErrCount = 0;
 	IsEstablished = false;
 	HDCPSuccess = false;
 	if(!g_bProbe) {
@@ -575,43 +579,43 @@ void CbusWakeUpPulseGenerator(void)
 	
 	regval |= 0xC0;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
-	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 - 1);
+	hr_msleep(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
 
 	
 	regval &= 0x3F;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
-	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
+	hr_msleep(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
 
 	
 	regval |= 0xC0;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
-	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
+	hr_msleep(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
 
 	
 	regval &= 0x3F;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
-	DelayMS(T_SRC_WAKE_PULSE_WIDTH_2 - 2);
+	hr_msleep(T_SRC_WAKE_PULSE_WIDTH_2 - 2);
 
 	
 	regval |= 0xC0;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
-	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
+	hr_msleep(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
 
 	
 	regval &= 0x3F;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
-	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
+	hr_msleep(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
 
 	
 	regval |= 0xC0;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
-	DelayMS(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
+	hr_msleep(T_SRC_WAKE_PULSE_WIDTH_1 - 2);
 
 	
 	regval &= 0x3F;
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x96, regval);
 
-	DelayMS(T_SRC_WAKE_TO_DISCOVER);
+	hr_msleep(T_SRC_WAKE_TO_DISCOVER);
 
 	TPI_DEBUG_PRINT(("Drv: CbusWakeUpPulseGenerator - end\n"));
 }
@@ -647,18 +651,13 @@ void	ProcessRgnd(void)
 	reg99RGNDRange = I2C_ReadByte(TPI_SLAVE_ADDR, 0x99) & 0x03;
 	TPI_DEBUG_PRINT(("Drv: RGND Reg 99 = %02X : ", (int)reg99RGNDRange));
 
-
-	if (0x02 == reg99RGNDRange ) {
+	
+	
 			SET_BIT(TPI_SLAVE_ADDR, 0x95, 5);
 
 			TPI_DEBUG_PRINT(("Drv: Waiting T_SRC_VBUS_CBUS_TO_STABLE (%d ms)\n", (int)T_SRC_VBUS_CBUS_TO_STABLE));
 			DelayMS(T_SRC_VBUS_CBUS_TO_STABLE);
 			CbusWakeUpPulseGenerator();
-	} else{
-			TPI_DEBUG_PRINT(("Drv: USB impedance. Set for USB Established = %02X.\n", (int)reg99RGNDRange));
-
-			CLR_BIT(TPI_SLAVE_ADDR, 0x95, 5);
-	}
 }
 void change_driving_strength(byte reg_a3, byte reg_a6)
 {
@@ -701,14 +700,11 @@ static void SwitchToD3(void)
 
 		TPI_DEBUG_PRINT(("Drv: Switch To D3: pinAllowD3 = %d\n", 1));
 
-
 		ForceUsbIdSwitchOpen();
 
 		ReadModifyWriteTPI(0x93, BIT_7 | BIT_6 | BIT_5 | BIT_4, 0);
 
 		ReadModifyWriteTPI(0x94, BIT_1 | BIT_0, 0);
-
-
 
 		ReleaseUsbIdSwitchOpen();
 
@@ -995,6 +991,7 @@ static uint8_t CBusProcessErrors(uint8_t intStatus)
 	return(result);
 }
 
+
 static void MhlCbusIsr(void)
 {
 	uint8_t		cbusInt;
@@ -1022,10 +1019,22 @@ static void MhlCbusIsr(void)
 	}
 
 	if ((cbusInt & BIT_5) || (cbusInt & BIT_6)) {
-		if (!WR_Dcap_Rdy_Int_Done && (cbusInt&BIT_5))
+		if (!WR_Dcap_Rdy_Int_Done && (cbusInt&BIT_5)) {
+			TPI_DEBUG_PRINT(("Drv:0x0A:%02X, 0x0D:%02X, 0x09:%02X\n",
+					(int)ReadByteCBUS(0x0A),
+					(int)ReadByteCBUS(0x0D),
+					(int)ReadByteCBUS(0x09)));
+			if (cbusErrCount++ >= 10) {
+				cbusErrCount = 0;
+				sii9234_request_abort();
+			}
 			return; 
+		}
 		gotData[0] = CBusProcessErrors(cbusInt);
 	}
+
+	
+	cbusErrCount = 0;
 
 	if (cbusInt & BIT_4) {
 		TPI_DEBUG_PRINT(("Drv: MSC_REQ_DONE\n"));
@@ -1083,8 +1092,19 @@ static void MhlCbusIsr(void)
 void D2ToD3(void)
 {
 	TPI_DEBUG_PRINT(("D2 To D3 mode\n"));
+
+	TPI_DEBUG_PRINT(("Drv: Switch To D3: pinAllowD3 = %d\n", 1));
+
+	ReadModifyWriteTPI(0x93, BIT_7 | BIT_6 | BIT_5 | BIT_4, 0);
+
+	ReadModifyWriteTPI(0x94, BIT_1 | BIT_0, 0);
+
+	ReadModifyWriteTPI(0x79, BIT_5 | BIT_4, BIT_4);
+
 	I2C_WriteByte(HDMI_SLAVE_ADDR, 0x01, 0x03);
-	I2C_WriteByte(0x7A, 0x3D, I2C_ReadByte(0x7A, 0x3D) & 0xFE);
+
+	I2C_WriteByte(0x7A, 0x3D, 0x3E);
+
 	fwPowerState = POWER_STATE_D3;
 }
 bool tpi_get_hpd_state(void)

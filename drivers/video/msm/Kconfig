@@ -15,6 +15,30 @@ config FB_MSM
 
 if FB_MSM
 
+config FB_MSM_RESOLUTION_OVERRIDE
+	bool "Support to fake different resolution for dst/src"
+	default n
+
+config FB_MSM_RESOLUTION_OVERRIDE_SRC_WIDTH
+	int "Override source width resolution"
+	depends on FB_MSM_RESOLUTION_OVERRIDE
+	default 1080
+
+config FB_MSM_RESOLUTION_OVERRIDE_SRC_HEIGHT
+	int "Override source height resolution"
+	depends on FB_MSM_RESOLUTION_OVERRIDE
+	default 1920
+
+config FB_MSM_RESOLUTION_OVERRIDE_DST_WIDTH
+	int "Override destination width resolution"
+	depends on FB_MSM_RESOLUTION_OVERRIDE
+	default 1080
+
+config FB_MSM_RESOLUTION_OVERRIDE_DST_HEIGHT
+	int "Override destination height resolution"
+	depends on FB_MSM_RESOLUTION_OVERRIDE
+	default 1920
+
 config FB_MSM_CABC
 	bool "Use CABC"
 	depends on FB_MSM
@@ -129,6 +153,16 @@ config FB_MSM_LVDS
 config FB_MSM_OVERLAY
 	depends on FB_MSM_MDP40 && ANDROID_PMEM
 	bool "MDP4 overlay support"
+	default n
+
+config MSM_ACL_ENABLE
+	bool "ACL Service"
+	depends on FB_MSM
+	default n
+
+config MSM_CABC_VIDEO_ENHANCE
+	bool "Use different CABC setting for Video"
+	depends on FB_MSM
 	default n
 
 config MSM_AUTOBL_ENABLE
@@ -991,6 +1025,27 @@ config MSM_ALT_DSI_ESCAPE_CLOCK
 	---help---
 	  Changing DSI escape clock source from PXO to byte clock to add
 	  more flexibility.
+
+config FB_MSM_ESD_WORKAROUND
+	bool "Panel ESD workaround"
+	default n
+	---help---
+	  Read panel power mode to determine if we need to recover display
+	  from ESD issue.
+
+config FB_MSM_CABC_LEVEL_CONTROL
+	bool "CABC LEVEL CONTROL"
+	default n
+	---help---
+	  Use attribute to switch CABC level.
+
+config FB_MSM_UNDERFLOW_WORKAROUND
+	bool "Display underflow workaround"
+	default y if !TRACING
+	default n
+	---help---
+	  Force underflow color to black to avoid blue splash.
+	  Say Y here after CRC stage.
 
 if FB_MSM_MDSS
 	source "drivers/video/msm/mdss/Kconfig"

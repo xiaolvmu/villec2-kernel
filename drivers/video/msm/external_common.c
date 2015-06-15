@@ -690,6 +690,8 @@ static ssize_t hdmi_3d_rda_format_3d(struct device *dev,
 	return ret;
 }
 
+extern void send_hdmi_uevent(void);
+
 static ssize_t hdmi_3d_wta_format_3d(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -708,7 +710,9 @@ static ssize_t hdmi_3d_wta_format_3d(struct device *dev,
 				external_common_state->format_3d);
 		}
 	} else {
-		DEV_DBG("%s: '%d' (unknown)\n", __func__, format_3d);
+		DEV_INFO("%s: '%d' (notify ready)\n", __func__, format_3d);
+		
+		send_hdmi_uevent();
 	}
 
 	return ret;
@@ -1245,6 +1249,12 @@ static void hdmi_edid_extract_extended_data_blocks(const uint8 *in_buf)
 	
 	uint8 const *etag = hdmi_edid_find_block(in_buf, start_offset, 7, &len);
 
+	if(etag == NULL){
+		external_common_state->pt_scan_info = 0;
+		external_common_state->it_scan_info = 0;
+		external_common_state->ce_scan_info = 0;
+		DEV_INFO("EDID: No extended data block\n");
+	}
 	while (etag != NULL) {
 		
 		if (len < 2) {
@@ -1391,30 +1401,38 @@ static void add_supported_video_format(
 	struct hdmi_disp_mode_list_type *disp_mode_list,
 	uint32 video_format)
 {
-	const struct hdmi_disp_mode_timing_type *timing =
-		hdmi_common_get_supported_mode(video_format);
-	boolean supported = timing != NULL;
+	const struct hdmi_disp_mode_timing_type *timing;
+	boolean supported = false;
+	boolean mhl_supported = true;
 
 	if (video_format >= HDMI_VFRMT_MAX)
 		return;
 
+	timing = hdmi_common_get_supported_mode(video_format);
+	supported = timing != NULL;
+
 	DEV_DBG("EDID: format: %d [%s], %s\n",
 		video_format, video_format_2string(video_format),
 		supported ? "Supported" : "Not-Supported");
-	if (supported) {
-		if (mhl_is_connected()) {
-			const struct hdmi_disp_mode_timing_type *mhl_timing =
-				hdmi_mhl_get_supported_mode(video_format);
-			boolean mhl_supported = mhl_timing != NULL;
-			DEV_DBG("EDID: format: %d [%s], %s by MHL\n",
+
+	if (mhl_is_connected()) {
+		const struct hdmi_disp_mode_timing_type *mhl_timing =
+			hdmi_mhl_get_supported_mode(video_format);
+		mhl_supported = mhl_timing != NULL;
+		DEV_DBG("EDID: format: %d [%s], %s by MHL\n",
 			video_format, video_format_2string(video_format),
-				mhl_supported ? "Supported" : "Not-Supported");
-			if (mhl_supported)
-				disp_mode_list->disp_mode_list[
+			mhl_supported ? "Supported" : "Not-Supported");
+	}
+
+	if (supported && mhl_supported) {
+		disp_mode_list->disp_mode_list[
 			disp_mode_list->num_of_elements++] = video_format;
-		} else
-			disp_mode_list->disp_mode_list[
-			disp_mode_list->num_of_elements++] = video_format;
+		if (video_format == external_common_state->video_resolution) {
+			DEV_DBG("%s: Default resolution %d [%s] supported\n",
+				__func__, video_format,
+				video_format_2string(video_format));
+			external_common_state->default_res_supported = true;
+		}
 	}
 }
 #ifdef SHOW_TV_NAME
@@ -1861,6 +1879,7 @@ int hdmi_common_read_edid(void)
 	memset(&external_common_state->disp_mode_list, 0,
 		sizeof(external_common_state->disp_mode_list));
 	memset(edid_buf, 0, sizeof(edid_buf));
+	external_common_state->default_res_supported = false;
 
 	status = hdmi_common_read_edid_block(0, edid_buf);
 	if (status || !check_edid_header(edid_buf)) {
@@ -1964,6 +1983,7 @@ error:
 	external_common_state->disp_mode_list.num_of_elements = 1;
 	external_common_state->disp_mode_list.disp_mode_list[0] =
 		external_common_state->video_resolution;
+	external_common_state->default_res_supported = true;
 	return status;
 }
 EXPORT_SYMBOL(hdmi_common_read_edid);
