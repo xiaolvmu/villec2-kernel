@@ -103,11 +103,6 @@ static int allocate_heap_memory(struct ion_heap *heap)
 		return 0;
 
 	while (!cp_heap->cpu_addr && (++tries < DMA_ALLOC_RETRIES)) {
-		cp_heap->cpu_addr = dma_alloc_attrs(dev,
-						cp_heap->heap_size,
-						&(cp_heap->handle),
-						0,
-						&attrs);
 		if (!cp_heap->cpu_addr)
 			msleep(20);
 	}
