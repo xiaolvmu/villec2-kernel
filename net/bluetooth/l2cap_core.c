@@ -90,16 +90,21 @@ static int l2cap_answer_move_poll(struct sock *sk);
 static int l2cap_create_cfm(struct hci_chan *chan, u8 status);
 static int l2cap_deaggregate(struct hci_chan *chan, struct l2cap_pinfo *pi);
 static void l2cap_chan_ready(struct sock *sk);
-static void l2cap_conn_del(struct hci_conn *hcon, int err, u8 is_process);
 static u16 l2cap_get_smallest_flushto(struct l2cap_chan_list *l);
 static void l2cap_set_acl_flushto(struct hci_conn *hcon, u16 flush_to);
 static void l2cap_queue_acl_data(struct work_struct *worker);
+static void l2cap_queue_smp_data(struct work_struct *worker);
 static struct att_channel_parameters{
 	struct sk_buff *skb;
 	struct l2cap_conn *conn;
 	__le16 cid;
 	int dir;
 } att_chn_params;
+static struct smp_channel_params{
+	struct sk_buff *skb;
+	struct l2cap_conn *conn;
+	__le16 cid;
+} smp_chn_params;
 
 /* ---- L2CAP channels ---- */
 static struct sock *__l2cap_get_chan_by_dcid(struct l2cap_chan_list *l, u16 cid)
@@ -959,6 +964,8 @@ struct sock *l2cap_find_sock_by_fixed_cid_and_dir(__le16 cid, bdaddr_t *src,
 
 	sk_for_each(sk, node, &l2cap_sk_list.head) {
 
+		BT_DBG("sock %p scid %d check cid : %d ", sk, l2cap_pi(sk)->scid, cid);
+
 		if (incoming && !l2cap_pi(sk)->incoming)
 			continue;
 
@@ -1039,7 +1046,6 @@ static void l2cap_le_conn_ready(struct l2cap_conn *conn)
 	write_lock_bh(&list->lock);
 
 	hci_conn_hold(conn->hcon);
-	conn->hcon->disc_timeout = HCI_DISCONN_TIMEOUT;
 
 	l2cap_sock_init(sk, parent);
 	bacpy(&bt_sk(sk)->src, conn->src);
@@ -1061,14 +1067,15 @@ clean:
 
 static void l2cap_conn_ready(struct l2cap_conn *conn)
 {
- 	struct l2cap_chan *chan;
-	struct hci_conn *hcon = conn->hcon;
+	struct l2cap_chan_list *l = &conn->chan_list;
+	struct sock *sk;
+
 	BT_DBG("conn %p", conn);
 
-	if (hcon->out && hcon->type == LE_LINK)
-		smp_conn_security(hcon, hcon->pending_sec_level);
+	if (!conn->hcon->out && conn->hcon->type == LE_LINK)
+		l2cap_le_conn_ready(conn);
 
- 	mutex_lock(&conn->chan_lock);
+	read_lock(&l->lock);
 
 	if (l->head) {
 		for (sk = l->head; sk; sk = l2cap_pi(sk)->next_c) {
@@ -1096,10 +1103,11 @@ static void l2cap_conn_ready(struct l2cap_conn *conn)
 
 			bh_unlock_sock(sk);
 		}
-	} else if (hcon->type == LE_LINK) {
-			if (smp_conn_security(hcon, chan->sec_level))
+	} else if (conn->hcon->type == LE_LINK) {
+		smp_conn_security(conn, BT_SECURITY_HIGH);
+	}
 
-	l2cap_chan_lock(chan);
+	read_unlock(&l->lock);
 
 	if (conn->hcon->out && conn->hcon->type == LE_LINK)
 		l2cap_le_conn_ready(conn);
@@ -1174,7 +1182,7 @@ static struct l2cap_conn *l2cap_conn_add(struct hci_conn *hcon, u8 status)
 	return conn;
 }
 
-static void l2cap_conn_del(struct hci_conn *hcon, int err, u8 is_process)
+void l2cap_conn_del(struct hci_conn *hcon, int err, u8 is_process)
 {
 	struct l2cap_conn *conn = hcon->l2cap_data;
 	struct sock *sk;
@@ -1219,6 +1227,7 @@ static void l2cap_conn_del(struct hci_conn *hcon, int err, u8 is_process)
 		kfree(conn);
 	}
 	att_chn_params.conn = NULL;
+  smp_chn_params.conn = NULL;
 	BT_DBG("att_chn_params.conn set to NULL");
 }
 
@@ -7392,6 +7401,7 @@ static void l2cap_recv_frame(struct l2cap_conn *conn, struct sk_buff *skb)
 	struct sock *sk;
 	u16 cid, len;
 	__le16 psm;
+	struct work_struct *smp_worker;
 
 	skb_pull(skb, L2CAP_HDR_SIZE);
 	cid = __le16_to_cpu(lh->cid);
@@ -7421,8 +7431,39 @@ static void l2cap_recv_frame(struct l2cap_conn *conn, struct sk_buff *skb)
 		break;
 
 	case L2CAP_CID_SMP:
+		BT_DBG("get socket state");
+		sk = l2cap_find_sock_by_fixed_cid_and_dir(
+		   L2CAP_CID_LE_DATA, conn->src, conn->dst, 1);
+		if (sk) {
+			BT_DBG("socket exists sk %p", sk);
+			bh_lock_sock(sk);
+
+			if (sk->sk_state != BT_BOUND && sk->sk_state != BT_CONNECTED) {
+				BT_DBG("socket state sk %p state %d", sk, sk->sk_state);
+				smp_chn_params.cid = L2CAP_CID_LE_DATA;
+				smp_chn_params.conn = conn;
+				smp_chn_params.skb = skb;
+				smp_worker = kzalloc(sizeof(*smp_worker), GFP_ATOMIC);
+				if (!smp_worker) {
+					BT_ERR("Out of memory smp_worker");
+				} else {
+					INIT_WORK(smp_worker, l2cap_queue_smp_data);
+					BT_DBG("schedule smp_worker");
+					schedule_work(smp_worker);
+				}
+
+				bh_unlock_sock(sk);
+				goto done;
+			} else {
+				BT_DBG("Socket state is BT_BOUND and BT_CONNECTED ");
+				bh_unlock_sock(sk);
+			}
+		}
+
 		if (smp_sig_channel(conn, skb))
 			l2cap_conn_del(conn->hcon, EACCES, 0);
+
+done:
 		break;
 
 	default:
@@ -7808,6 +7849,68 @@ static int l2cap_debugfs_show(struct seq_file *f, void *p)
 
 	return 0;
 }
+
+static void l2cap_queue_smp_data(struct work_struct *worker)
+{
+	struct sock *sk = NULL;
+	struct hci_conn *hcon = NULL;
+	int attempts = 0;
+	__u8 reason;
+
+	for (attempts = 0; attempts < 40; attempts++) {
+		msleep(50);
+		BT_DBG("sock state check attempt %d", attempts);
+		if (!smp_chn_params.conn) {
+			BT_DBG("smp_chn_params.conn is NULL");
+			return;
+		}
+		sk = l2cap_find_sock_by_fixed_cid_and_dir(
+		   smp_chn_params.cid,
+		   smp_chn_params.conn->src,
+		   smp_chn_params.conn->dst, 1);
+
+		if (!sk) {
+			BT_DBG("sock does not exist");
+			goto err;
+		}
+
+		bh_lock_sock(sk);
+		if (sk->sk_state == BT_CONNECTED) {
+			BT_DBG("sock state BT_CONNECTED");
+
+			bh_unlock_sock(sk);
+			if (smp_sig_channel(
+			   smp_chn_params.conn,
+			   smp_chn_params.skb))
+				l2cap_conn_del(
+				   smp_chn_params.conn->hcon,
+				   EACCES, 0);
+			return;
+		}
+		bh_unlock_sock(sk);
+	}
+
+err:
+	//If sock state is not connected after 40 attepmts
+	//respond to the remote saying SMP_UNSPECIFIED
+	hcon = smp_chn_params.conn->hcon;
+	reason = SMP_UNSPECIFIED;
+	BT_ERR("SMP_CMD_PAIRING_FAIL: %d", reason);
+	smp_conn_security_fail(
+	   smp_chn_params.conn,
+	   SMP_CMD_PAIRING_FAIL,
+	   reason);
+	del_timer(&hcon->smp_timer);
+	clear_bit(HCI_CONN_ENCRYPT_PEND, &hcon->pend);
+	mgmt_auth_failed(hcon->hdev->id,
+					 smp_chn_params.conn->dst,
+					 reason);
+	hci_conn_put(hcon);
+
+	kfree_skb(smp_chn_params.skb);
+	l2cap_conn_del(smp_chn_params.conn->hcon, EACCES, 0);
+}
+
 
 static void l2cap_queue_acl_data(struct work_struct *worker)
 {

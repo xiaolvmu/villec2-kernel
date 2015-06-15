@@ -1,6 +1,7 @@
 /*
    BlueZ - Bluetooth protocol stack for Linux
-   Copyright (c) 2000-2001, 2010-2012 The Linux Foundation.  All rights reserved.
+   Copyright (c) 2000-2001, The Linux Foundation. All rights reserved.
+   Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
    Written 2000,2001 by Maxim Krasnyansky <maxk@qualcomm.com>
 
@@ -44,7 +45,7 @@
 
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
-#include <net/bluetooth/smp.h>
+#include <net/bluetooth/l2cap.h>
 
 struct hci_conn *hci_le_connect(struct hci_dev *hdev, __u16 pkt_type,
 				bdaddr_t *dst, __u8 sec_level, __u8 auth_type,
@@ -393,9 +394,7 @@ void hci_le_start_enc(struct hci_conn *conn, __le16 ediv, __u8 rand[8],
 }
 EXPORT_SYMBOL(hci_le_start_enc);
 
-#define LTK_SIZE 16
-
-void hci_le_ltk_reply(struct hci_conn *conn, u8 ltk[LTK_SIZE])
+void hci_le_ltk_reply(struct hci_conn *conn, u8 ltk[16])
 {
 	struct hci_dev *hdev = conn->hdev;
 	struct hci_cp_le_ltk_reply cp;
@@ -405,7 +404,7 @@ void hci_le_ltk_reply(struct hci_conn *conn, u8 ltk[LTK_SIZE])
 	memset(&cp, 0, sizeof(cp));
 
 	cp.handle = cpu_to_le16(conn->handle);
-	memcpy(cp.ltk, ltk, LTK_SIZE);
+	memcpy(cp.ltk, ltk, sizeof(cp.ltk));
 
 	hci_send_cmd(hdev, HCI_OP_LE_LTK_REPLY, sizeof(cp), &cp);
 }
@@ -545,6 +544,7 @@ struct hci_conn *hci_conn_add(struct hci_dev *hdev, int type,
 	conn->disc_timeout = HCI_DISCONN_TIMEOUT;
 	conn->conn_valid = true;
 	spin_lock_init(&conn->lock);
+	wake_lock_init(&conn->idle_lock, WAKE_LOCK_SUSPEND, "bt_idle");
 
 	switch (type) {
 	case ACL_LINK:
@@ -622,6 +622,7 @@ int hci_conn_del(struct hci_conn *conn)
 
 	/* Make sure no timers are running */
 	del_timer(&conn->idle_timer);
+	wake_lock_destroy(&conn->idle_lock);
 	del_timer(&conn->disc_timer);
 	del_timer(&conn->smp_timer);
 	__cancel_delayed_work(&conn->rssi_update_work);
@@ -660,6 +661,9 @@ int hci_conn_del(struct hci_conn *conn)
 	skb_queue_purge(&conn->data_q);
 
 	hci_conn_put_device(conn);
+
+	if (conn->hidp_session_valid)
+		hci_conn_put_device(conn);
 
 	hci_dev_put(hdev);
 
@@ -979,9 +983,6 @@ int hci_conn_security(struct hci_conn *conn, __u8 sec_level, __u8 auth_type)
 {
 	BT_DBG("conn %p %d %d", conn, sec_level, auth_type);
 
-	if (conn->type == LE_LINK)
-		return smp_conn_security(conn, sec_level);
-
 	if (sec_level == BT_SECURITY_SDP)
 		return 1;
 
@@ -1085,6 +1086,7 @@ timer:
 		if (conn->conn_valid) {
 			mod_timer(&conn->idle_timer,
 				jiffies + msecs_to_jiffies(hdev->idle_timeout));
+			wake_lock(&conn->idle_lock);
 		}
 		spin_unlock_bh(&conn->lock);
 	}
@@ -1272,8 +1274,10 @@ EXPORT_SYMBOL(hci_conn_hold_device);
 
 void hci_conn_put_device(struct hci_conn *conn)
 {
-	if (atomic_dec_and_test(&conn->devref))
+	if (atomic_dec_and_test(&conn->devref)) {
+		conn->hidp_session_valid = false;
 		hci_conn_del_sysfs(conn);
+	}
 }
 EXPORT_SYMBOL(hci_conn_put_device);
 

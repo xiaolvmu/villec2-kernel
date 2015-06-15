@@ -1,5 +1,6 @@
 /*
    RFCOMM implementation for Linux Bluetooth stack (BlueZ).
+   Copyright (c) 2013 The Linux Foundation.  All rights reserved.
    Copyright (C) 2002 Maxim Krasnyansky <maxk@qualcomm.com>
    Copyright (C) 2002 Marcel Holtmann <marcel@holtmann.org>
 

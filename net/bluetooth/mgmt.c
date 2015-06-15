@@ -1,7 +1,7 @@
 /*
    BlueZ - Bluetooth protocol stack for Linux
    Copyright (C) 2010  Nokia Corporation
-   Copyright (c) 2011-2013 The Linux Foundation.  All rights reserved.
+   Copyright (c) 2011-2012 The Linux Foundation.  All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License version 2 as
@@ -383,30 +383,23 @@ static int set_powered(struct sock *sk, u16 index, unsigned char *data, u16 len)
 		err = cmd_status(sk, index, MGMT_OP_SET_POWERED, EBUSY);
 		goto failed;
 	}
-	/* Avoid queing power_on/off when the set up is going on via
-	 * hci_register_dev
-	 */
-	if (!test_bit(HCI_SETUP, &hdev->flags)) {
-		cmd = mgmt_pending_add(sk, MGMT_OP_SET_POWERED, index, data,
-									len);
-		if (!cmd) {
-			err = -ENOMEM;
-			goto failed;
-		}
 
-		hci_dev_unlock_bh(hdev);
-
-		if (cp->val)
-			queue_work(hdev->workqueue, &hdev->power_on);
-		else
-			queue_work(hdev->workqueue, &hdev->power_off);
-
-		err = 0;
-		hci_dev_put(hdev);
-	} else {
-		err = cmd_status(sk, index, MGMT_OP_SET_POWERED, ENODEV);
+	cmd = mgmt_pending_add(sk, MGMT_OP_SET_POWERED, index, data, len);
+	if (!cmd) {
+		err = -ENOMEM;
 		goto failed;
 	}
+
+	hci_dev_unlock_bh(hdev);
+
+	if (cp->val)
+		queue_work(hdev->workqueue, &hdev->power_on);
+	else
+		queue_work(hdev->workqueue, &hdev->power_off);
+
+	err = 0;
+	hci_dev_put(hdev);
+
 	return err;
 
 failed:
@@ -2245,11 +2238,10 @@ void mgmt_inquiry_complete_evt(u16 index, u8 status)
 
 		mgmt_event(MGMT_EV_DISCOVERING, index, &cp, sizeof(cp), NULL);
 
-		if (hdev) {
-			BT_DBG("Setting state to SCAN_IDLE\n");
-			hdev->disco_state = SCAN_IDLE;
+		hdev->disco_state = SCAN_IDLE;
+
+		if (hdev)
 			goto done;
-		}
 		else
 			return;
 	}
