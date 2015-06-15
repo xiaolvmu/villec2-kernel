@@ -261,10 +261,6 @@ int mdp4_lcdc_pipe_commit(void)
 		
 		mdp4_stat.kickoff_ov0++;
 		outpdw(MDP_BASE + 0x0004, 0);
-	} else {
-		
-		INIT_COMPLETION(vctrl->dmap_comp);
-		vsync_irq_enable(INTR_DMA_P_DONE, MDP_DMAP_TERM);
 	}
 	spin_unlock_irqrestore(&vctrl->spin_lock, flags);
 
@@ -953,7 +949,7 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	if (pipe->ov_blt_addr)
 		mdp4_lcdc_wait4ov(0);
 	else
-		mdp4_lcdc_wait4dmap(0);
+		mdp4_lcdc_wait4vsync(cndx);
 
 	mdp4_overlay_mdp_perf_upd(mfd, 0);
 }
