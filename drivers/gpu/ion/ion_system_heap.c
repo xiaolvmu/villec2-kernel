@@ -223,10 +223,6 @@ int ion_system_heap_cache_ops(struct ion_heap *heap, struct ion_buffer *buffer,
 		for_each_sg(table->sgl, sg, table->nents, i) {
 			struct page *page = sg_page(sg);
 			pstart = page_to_phys(page);
-			/*
-			 * If page -> phys is returning NULL, something
-			 * has really gone wrong...
-			 */
 			if (!pstart) {
 				WARN(1, "Could not translate virtual address to physical address\n");
 				return -EINVAL;
@@ -271,11 +267,6 @@ int ion_system_heap_map_iommu(struct ion_buffer *buffer,
 	data->mapped_size = iova_length;
 	extra = iova_length - buffer->size;
 
-	/* Use the biggest alignment to allow bigger IOMMU mappings.
-	 * Use the first entry since the first entry will always be the
-	 * biggest entry. To take advantage of bigger mapping sizes both the
-	 * VA and PA addresses have to be aligned to the biggest size.
-	 */
 	if (table->sgl->length > align)
 		align = table->sgl->length;
 

@@ -23,6 +23,7 @@
 #include <linux/mm.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #include <linux/iommu.h>
 #include <linux/seq_file.h>
 #include "ion_priv.h"
@@ -249,10 +250,6 @@ int ion_carveout_cache_ops(struct ion_heap *heap, struct ion_buffer *buffer,
 	ion_phys_addr_t buff_phys = buffer->priv_phys;
 
 	if (!vaddr) {
-		/*
-		 * Split the vmalloc space into smaller regions in
-		 * order to clean and/or invalidate the cache.
-		 */
 		size_to_vmap = ((VMALLOC_END - VMALLOC_START)/8);
 		total_size = buffer->size;
 
@@ -316,7 +313,8 @@ int ion_carveout_cache_ops(struct ion_heap *heap, struct ion_buffer *buffer,
 
 	if (carveout_heap->has_outer_cache) {
 		unsigned long pstart = buffer->priv_phys + offset;
-		outer_cache_op(pstart, pstart + length);
+		if (outer_cache_op)
+			outer_cache_op(pstart, pstart + length);
 	}
 	return 0;
 }
@@ -339,18 +337,19 @@ static int ion_carveout_print_debug(struct ion_heap *heap, struct seq_file *s,
 		struct rb_node *n;
 
 		seq_printf(s, "\nMemory Map\n");
-		seq_printf(s, "%16.s %14.s %14.s %14.s\n",
-			   "client", "start address", "end address",
+		seq_printf(s, "%16.s %16.s %14.s %14.s %14.s\n",
+			   "client", "creator", "start address", "end address",
 			   "size (hex)");
 
 		for (n = rb_first(mem_map); n; n = rb_next(n)) {
 			struct mem_map_data *data =
 					rb_entry(n, struct mem_map_data, node);
 			const char *client_name = "(null)";
+			const char *creator_name = "(null)";
 
 			if (last_end < data->addr) {
-				seq_printf(s, "%16.s %14lx %14lx %14lu (%lx)\n",
-					   "FREE", last_end, data->addr-1,
+				seq_printf(s, "%16.s %16.s %14lx %14lx %14lu (%lx)\n",
+					   "FREE", "NA", last_end, data->addr-1,
 					   data->addr-last_end,
 					   data->addr-last_end);
 			}
@@ -358,14 +357,17 @@ static int ion_carveout_print_debug(struct ion_heap *heap, struct seq_file *s,
 			if (data->client_name)
 				client_name = data->client_name;
 
-			seq_printf(s, "%16.s %14lx %14lx %14lu (%lx)\n",
-				   client_name, data->addr,
+			if (data->creator_name)
+				creator_name = data->creator_name;
+
+			seq_printf(s, "%16.s %16.s %14lx %14lx %14lu (%lx)\n",
+				   client_name, creator_name, data->addr,
 				   data->addr_end,
 				   data->size, data->size);
 			last_end = data->addr_end+1;
 		}
 		if (last_end < end) {
-			seq_printf(s, "%16.s %14lx %14lx %14lu (%lx)\n", "FREE",
+			seq_printf(s, "%16.s %16.s %14lx %14lx %14lu (%lx)\n", "FREE", "NA",
 				last_end, end-1, end-last_end, end-last_end);
 		}
 	}

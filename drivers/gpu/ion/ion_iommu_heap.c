@@ -33,13 +33,6 @@ struct ion_iommu_heap {
 	unsigned int has_outer_cache;
 };
 
-/*
- * We will attempt to allocate high-order pages and store those in an
- * sg_list. However, some APIs expect an array of struct page * where
- * each page is of size PAGE_SIZE. We use this extra structure to
- * carry around an array of such pages (derived from the high-order
- * pages with nth_page).
- */
 struct ion_iommu_priv_data {
 	struct page **pages;
 	unsigned int pages_uses_vmalloc;
@@ -57,6 +50,8 @@ struct page_info {
 	unsigned int order;
 	struct list_head list;
 };
+
+atomic_t v = ATOMIC_INIT(0);
 
 static unsigned int order_to_size(int order)
 {
@@ -141,10 +136,6 @@ static int ion_iommu_heap_allocate(struct ion_heap *heap,
 		page_tbl_size = sizeof(struct page *) * data->nrpages;
 
 		if (page_tbl_size > SZ_8K) {
-			/*
-			 * Do fallback to ensure we have a balance between
-			 * performance and availability.
-			 */
 			data->pages = kmalloc(page_tbl_size,
 					      __GFP_COMP | __GFP_NORETRY |
 					      __GFP_NO_KSWAPD | __GFP_NOWARN);
@@ -184,17 +175,6 @@ static int ion_iommu_heap_allocate(struct ion_heap *heap,
 			kfree(info);
 		}
 
-		/*
-		 * As an optimization, we omit __GFP_ZERO from
-		 * alloc_page above and manually zero out all of the
-		 * pages in one fell swoop here. To safeguard against
-		 * insufficient vmalloc space, we only vmap
-		 * `npages_to_vmap' at a time, starting with a
-		 * conservative estimate of 1/8 of the total number of
-		 * vmalloc pages available. Note that the `pages'
-		 * array is composed of all 4K pages, irrespective of
-		 * the size of the pages on the sg list.
-		 */
 		npages_to_vmap = ((VMALLOC_END - VMALLOC_START)/8)
 			>> PAGE_SHIFT;
 		total_pages = data->nrpages;
@@ -223,6 +203,9 @@ static int ion_iommu_heap_allocate(struct ion_heap *heap,
 						DMA_BIDIRECTIONAL);
 
 		buffer->priv_virt = data;
+		
+		atomic_add(data->size, &v);
+		
 		return 0;
 
 	} else {
@@ -270,11 +253,52 @@ static void ion_iommu_heap_free(struct ion_buffer *buffer)
 	sg_free_table(table);
 	kfree(table);
 	table = 0;
+	
+	atomic_sub(data->size, &v);
+	
 	if (data->pages_uses_vmalloc)
 		vfree(data->pages);
 	else
 		kfree(data->pages);
 	kfree(data);
+}
+
+int ion_iommu_heap_dump_size(void)
+{
+	int ret = atomic_read(&v);
+	return ret;
+}
+
+static int ion_iommu_print_debug(struct ion_heap *heap, struct seq_file *s,
+				    const struct rb_root *mem_map)
+{
+	seq_printf(s, "Total bytes currently allocated: %d (%x)\n",
+		atomic_read(&v), atomic_read(&v));
+
+	if (mem_map) {
+		struct rb_node *n;
+
+		seq_printf(s, "\nBuffer Info\n");
+		seq_printf(s, "%16.s %16.s %14.s\n",
+			   "client", "creator", "size (hex)");
+
+		for (n = rb_first(mem_map); n; n = rb_next(n)) {
+			struct mem_map_data *data =
+					rb_entry(n, struct mem_map_data, node);
+			const char *client_name = "(null)";
+			const char *creator_name = "(null)";
+
+			if (data->client_name)
+				client_name = data->client_name;
+
+			if (data->creator_name)
+				creator_name = data->creator_name;
+
+			seq_printf(s, "%16.s %16.s %14lu (%lx)\n",
+				   client_name, creator_name, data->size, data->size);
+		}
+	}
+	return 0;
 }
 
 void *ion_iommu_heap_map_kernel(struct ion_heap *heap,
@@ -358,11 +382,6 @@ int ion_iommu_heap_map_iommu(struct ion_buffer *buffer,
 	data->mapped_size = iova_length;
 	extra = iova_length - buffer->size;
 
-	/* Use the biggest alignment to allow bigger IOMMU mappings.
-	 * Use the first entry since the first entry will always be the
-	 * biggest entry. To take advantage of bigger mapping sizes both the
-	 * VA and PA addresses have to be aligned to the biggest size.
-	 */
 	if (buffer->sg_table->sgl->length > align)
 		align = buffer->sg_table->sgl->length;
 
@@ -511,6 +530,7 @@ static struct ion_heap_ops iommu_heap_ops = {
 	.cache_op = ion_iommu_cache_ops,
 	.map_dma = ion_iommu_heap_map_dma,
 	.unmap_dma = ion_iommu_heap_unmap_dma,
+	.print_debug = ion_iommu_print_debug,
 };
 
 struct ion_heap *ion_iommu_heap_create(struct ion_platform_heap *heap_data)
