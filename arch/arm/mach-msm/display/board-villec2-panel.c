@@ -30,11 +30,16 @@ static void villec2_lcd_shutdown(struct platform_device *pdev);
 static int villec2_lcd_on(struct platform_device *pdev);
 static int villec2_lcd_off(struct platform_device *pdev);
 static void villec2_set_backlight(struct msm_fb_data_type *mfd);
+static void villec2_display_on(struct msm_fb_data_type *mfd);
 static int mipi_villec2_device_register(const char* dev_name, struct msm_panel_info *pinfo, u32 channel, u32 panel);
+#if defined (CONFIG_MSM_AUTOBL_ENABLE)
+static int villec2_samsung_acl_enable(int on, struct msm_fb_data_type *mfd);
+#endif
 
 static struct dsi_buf panel_tx_buf;
 static struct dsi_buf panel_rx_buf;
 static struct msm_panel_info pinfo;
+static int cur_bl_level = 0;
 static int mipi_lcd_on = 1;
 struct dcs_cmd_req cmdreq;
 
@@ -50,9 +55,13 @@ static struct platform_driver this_driver = {
 };
 
 struct msm_fb_panel_data villec2_panel_data = {
-	.on	       = villec2_lcd_on,
-	.off	       = villec2_lcd_off,
+	.on			= villec2_lcd_on,
+	.off		= villec2_lcd_off,
 	.set_backlight = villec2_set_backlight,
+	.display_on = villec2_display_on,
+#if defined (CONFIG_MSM_AUTOBL_ENABLE)
+	.autobl_enable = villec2_samsung_acl_enable,
+#endif
 };
 
 static struct mipi_dsi_platform_data mipi_dsi_pdata = {
@@ -124,7 +133,6 @@ static struct dsi_cmd_desc samsung_cmd_on_cmds_c2[] = {
         {DTYPE_DCS_LWRITE, 1, 0, 0, 0,  sizeof(samsung_panel_width), samsung_panel_width},
         {DTYPE_DCS_LWRITE, 1, 0, 0, 0,  sizeof(samsung_panel_height), samsung_panel_height},
         {DTYPE_DCS_WRITE1, 1, 0, 0, 0,  sizeof(samsung_panel_vinit), samsung_panel_vinit},
-	{DTYPE_DCS_WRITE, 1, 0, 0, 0, sizeof(display_on), display_on},
 };
 
 static struct dsi_cmd_desc samsung_display_off_cmds[] = {
@@ -132,6 +140,10 @@ static struct dsi_cmd_desc samsung_display_off_cmds[] = {
 		sizeof(display_off), display_off},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120,
 		sizeof(enter_sleep), enter_sleep}
+};
+
+static struct dsi_cmd_desc samsung_display_on_cmds[] = {
+	{DTYPE_DCS_WRITE, 1, 0, 0, 0, sizeof(display_on), display_on},
 };
 
 static char manufacture_id[2] = {0x04, 0x00}; 		
@@ -255,6 +267,42 @@ static struct mipi_dsi_phy_ctrl samsung_dsi_cmd_mode_phy_db = {
 	 0x05, 0x14, 0x03, 0x00, 0x00, 0x54, 0x06, 0x10, 0x04, 0x00},
 };
 
+#if defined (CONFIG_FB_MSM_MDP_ABL)
+static struct gamma_curvy smd_gamma_tbl = {
+       .gamma_len = 33,
+       .bl_len = 8,
+       .ref_y_gamma = {0, 1, 2, 4, 8, 16, 24, 33, 45, 59, 74, 94,
+                       112, 133, 157, 183, 212, 244, 275, 314, 348,
+                       392, 439, 487, 537, 591, 645, 706, 764, 831,
+                       896, 963, 1024},
+       .ref_y_shade = {0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352,
+                       384, 416, 448, 480, 512, 544, 576, 608, 640, 672, 704,
+                       736, 768, 800, 832, 864, 896, 928, 960, 992, 1024},
+       .ref_bl_lvl = {0, 141, 233, 317, 462, 659, 843, 1024},
+       .ref_y_lvl = {0, 138, 218, 298, 424, 601, 818, 1024},
+};
+#endif
+
+#if defined (CONFIG_MSM_AUTOBL_ENABLE)
+static int acl_enable = 0;
+char acl_cutoff_40[] = {
+	0xC1, 0x47, 0x53, 0x13, 0x53, 0x00, 0x00, 0x01, 0xDF, 0x00,
+	0x00, 0x03, 0x1F, 0x00, 0x00, 0x00, 0x05, 0x0E, 0x0F, 0x0F,
+	0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x00
+};
+static char acl_on[] = {0xC0, 0x01};
+static char acl_off[] = {0xC0, 0x00};
+static struct dsi_cmd_desc samsung_acl_on_cmd[] = {
+	{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(acl_cutoff_40), acl_cutoff_40},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 0,  sizeof(acl_on), acl_on},
+};
+
+static struct dsi_cmd_desc samsung_acl_off_cmd[] = {
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 0, sizeof(acl_off), acl_off},
+};
+#endif
+
+
 static uint32 mipi_samsung_manufacture_id(struct msm_fb_data_type *mfd)
 {
 	struct dsi_buf *rp, *tp;
@@ -333,6 +381,9 @@ static int mipi_cmd_samsung_blue_qhd_pt_init(void)
 
 	PR_DISP_INFO("panel: mipi_cmd_samsung_qhd\n");
 
+#if defined (CONFIG_FB_MSM_MDP_ABL)
+	pinfo.panel_char = smd_gamma_tbl;
+#endif
 	pinfo.xres = 540;
 	pinfo.yres = 960;
 	pinfo.type = MIPI_CMD_PANEL;
@@ -453,6 +504,34 @@ static int villec2_lcd_on(struct platform_device *pdev)
 	return 0;
 }
 
+static void villec2_display_on(struct msm_fb_data_type *mfd)
+{
+	if (panel_type == PANEL_ID_VILLE_SAMSUNG_SG_C2) {
+		cmdreq.cmds = samsung_display_on_cmds;
+		cmdreq.cmds_cnt = ARRAY_SIZE(samsung_display_on_cmds);
+		cmdreq.flags = CMD_REQ_COMMIT;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+		mipi_dsi_cmdlist_put(&cmdreq);
+	}
+
+	cur_bl_level = 0;
+
+#if defined (CONFIG_MSM_AUTOBL_ENABLE)
+	if (acl_enable) {
+		cmdreq.cmds = samsung_acl_on_cmd;
+		cmdreq.cmds_cnt = ARRAY_SIZE(samsung_acl_on_cmd);
+		cmdreq.flags = CMD_REQ_COMMIT;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+		mipi_dsi_cmdlist_put(&cmdreq);
+
+		acl_enable = 1;
+		PR_DISP_INFO("%s acl enable", __func__);
+	}
+#endif
+}
+
 static int villec2_lcd_off(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
@@ -480,14 +559,63 @@ static int villec2_lcd_off(struct platform_device *pdev)
 
 static void villec2_set_backlight(struct msm_fb_data_type *mfd)
 {
-	if (!mfd->panel_power_on) {
+	if (!mfd->panel_power_on || cur_bl_level == mfd->bl_level) {
 		return;
 	}
 
 	villec2_mipi_dsi_set_backlight(mfd);
 
+	cur_bl_level = mfd->bl_level;
 	PR_DISP_DEBUG("%s- bl_level=%d\n", __func__, mfd->bl_level);
 }
+
+#if defined (CONFIG_MSM_AUTOBL_ENABLE)
+static int villec2_samsung_acl_enable(int on, struct msm_fb_data_type *mfd)
+{
+	static int first_time = 1;
+	static unsigned long last_autobkl_stat = 0, cur_autobkl_stat = 0;
+
+	
+	if(cur_bl_level > 245)
+		cur_autobkl_stat = 8;
+	else
+		cur_autobkl_stat = on;
+
+	if(cur_autobkl_stat == last_autobkl_stat)
+		return 0;
+
+	last_autobkl_stat = cur_autobkl_stat;
+
+	if (cur_autobkl_stat == 8 && !first_time) {
+		if (panel_type == PANEL_ID_VILLE_SAMSUNG_SG_C2) {
+			cmdreq.cmds = samsung_acl_off_cmd;
+			cmdreq.cmds_cnt = ARRAY_SIZE(samsung_acl_off_cmd);
+			cmdreq.flags = CMD_REQ_COMMIT;
+			cmdreq.rlen = 0;
+			cmdreq.cb = NULL;
+			mipi_dsi_cmdlist_put(&cmdreq);
+
+			acl_enable = 0;
+			PR_DISP_INFO("%s acl disable", __func__);
+		}
+	} else if (cur_autobkl_stat == 12) {
+		if (panel_type == PANEL_ID_VILLE_SAMSUNG_SG_C2) {
+			cmdreq.cmds = samsung_acl_on_cmd;
+			cmdreq.cmds_cnt = ARRAY_SIZE(samsung_acl_on_cmd);
+			cmdreq.flags = CMD_REQ_COMMIT;
+			cmdreq.rlen = 0;
+			cmdreq.cb = NULL;
+			mipi_dsi_cmdlist_put(&cmdreq);
+
+			acl_enable = 1;
+			PR_DISP_INFO("%s acl enable", __func__);
+		}
+	}
+	first_time = 0;
+	return 0;
+}
+#endif
+
 
 static int __devinit villec2_lcd_probe(struct platform_device *pdev)
 {
