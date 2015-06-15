@@ -40,6 +40,7 @@ typedef struct {
 	int (*enable_5v)(int on);
 	int (*power)(int);
 	int (*mhl_power_vote)(bool enable);
+	int (*mhl_lpm_power)(bool enable);
 } T_MHL_PLATFORM_DATA;
 
 #define M_MHL_SEND_DEBUG(x...) pr_info(x)
