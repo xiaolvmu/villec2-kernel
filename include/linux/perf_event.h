@@ -527,7 +527,7 @@ struct perf_event {
 	struct hw_perf_event		hw;
 
 	struct perf_event_context	*ctx;
-	struct file			*filp;
+	atomic_long_t			refcount;
 
 	atomic64_t			child_total_time_enabled;
 	atomic64_t			child_total_time_running;

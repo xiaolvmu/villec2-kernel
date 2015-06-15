@@ -350,7 +350,6 @@ static int rpm_suspend(struct device *dev, int rpmflags)
 		goto repeat;
 	}
 
-	dev->power.deferred_resume = false;
 	if (dev->power.no_callbacks)
 		goto no_callback;	
 
@@ -426,6 +425,7 @@ static int rpm_suspend(struct device *dev, int rpmflags)
 	wake_up_all(&dev->power.wait_queue);
 
 	if (dev->power.deferred_resume) {
+		dev->power.deferred_resume = false;
 		rpm_resume(dev, 0);
 		retval = -EAGAIN;
 		goto out;
@@ -623,6 +623,7 @@ static int rpm_resume(struct device *dev, int rpmflags)
 #if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
 			dev->power.runtime_rpm_resume_footprint2 = 13;
 #endif
+			retval = 1;
 			goto no_callback;	
 		}
 		if ( log_enable == 1 )
@@ -794,18 +795,11 @@ static int rpm_resume(struct device *dev, int rpmflags)
 	if ( log_enable == 1 )
 		dev_info(dev, "%s[%d] wake_up_all+\n", __func__, __LINE__);
 	wake_up_all(&dev->power.wait_queue);
-	if ( log_enable == 1 )
-		dev_info(dev, "%s[%d] wake_up_all-\n", __func__, __LINE__);
 #if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
 	dev->power.runtime_rpm_resume_footprint2 = 25;
 #endif
-	if (!retval) {
-		if ( log_enable == 1 )
-			dev_info(dev, "%s[%d] rpm_idle+\n", __func__, __LINE__);
+	if (retval >= 0)
 		rpm_idle(dev, RPM_ASYNC);
-		if ( log_enable == 1 )
-			dev_info(dev, "%s[%d] rpm_idle-\n", __func__, __LINE__);
-	}
 
  out:
 	if (parent && !dev->power.irq_safe) {

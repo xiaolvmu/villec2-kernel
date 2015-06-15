@@ -233,6 +233,6 @@ cifsConvertToUTF16(__le16 *target, const char *source, int srclen,
 	}
 
 ctoUTF16_out:
-	return i;
+	return j;
 }
 
