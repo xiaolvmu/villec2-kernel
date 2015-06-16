@@ -44,6 +44,7 @@ struct task_struct *vsync_task;
 static int first_pixel_start_x;
 static int first_pixel_start_y;
 static int dsi_video_enabled;
+static int vsync_irq_cnt;
 
 #define MAX_CONTROLLER	1
 #define VSYNC_EXPIRE_TICK 1
@@ -277,7 +278,6 @@ int mdp4_dsi_video_pipe_commit(void)
 static void mdp4_video_vsync_irq_ctrl(int cndx, int enable)
 {
 	struct vsycn_ctrl *vctrl;
-	static int vsync_irq_cnt;
 
 	vctrl = &vsync_ctrl_db[cndx];
 
@@ -332,9 +332,6 @@ void mdp4_dsi_video_wait4vsync(int cndx)
 
 	if (atomic_read(&vctrl->suspend) > 0)
 		return;
-
-	
-	mdp4_overlay_dsi_video_start();
 
 	mdp4_video_vsync_irq_ctrl(cndx, 1);
 
@@ -563,6 +560,8 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 
 	vctrl->mfd = mfd;
 	vctrl->dev = mfd->fbi->dev;
+	vctrl->vsync_irq_enabled = 0;
+	vsync_irq_cnt = 0;
 
 	
 	mdp_clk_ctrl(1);
