@@ -676,7 +676,6 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 
 		for (j = 0; j < page_size >> PAGE_SHIFT; j++) {
 			pages[pcount++] = nth_page(page, j);
-			SetPageKgsl(nth_page(page, j));
 		}
 
 		sg_set_page(&memdesc->sg[sglen++], page, page_size, 0);
