@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -60,7 +60,6 @@ struct lcd_panel_info {
 	__u32 v_pulse_width;
 	__u32 hw_vsync_mode;
 	__u32 vsync_notifier_period;
-	__u32 blt_ctrl;
 	__u32 rev;
 };
 
@@ -79,8 +78,6 @@ struct lcdc_panel_info {
 	
 	uint32 yres_pad;
 	boolean is_sync_active_high;
-	
-	__u32 no_set_tear;
 };
 
 struct mddi_panel_info {
@@ -134,9 +131,6 @@ struct mipi_panel_info {
 	char no_max_pkt_size;
 	
 	char force_clk_lane_hs;
-	
-	struct mipi_dsi_reg_set *dsi_reg_db;
-	uint32 dsi_reg_db_size;
 };
 
 enum lvds_mode {
@@ -169,11 +163,9 @@ struct msm_panel_info {
 	__u32 frame_count;
 	__u32 is_3d_panel;
 	__u32 frame_rate;
-	__u32 frame_interval;
 	__u32 width;
 	__u32 height;
 	__u32 camera_backlight;
-	__u32 read_pointer;
 
 	struct mddi_panel_info mddi;
 	struct lcd_panel_info lcd;
@@ -194,42 +186,26 @@ struct msm_fb_panel_data {
 	void (*set_rect) (int x, int y, int xres, int yres);
 	void (*set_vsync_notifier) (msm_fb_vsync_handler_type, void *arg);
 	void (*set_backlight) (struct msm_fb_data_type *);
-	int (*get_backlight_on_status) (void);
 
 	
 	void (*display_on) (struct msm_fb_data_type *);
 	void (*display_off) (struct msm_fb_data_type *);
 	int (*on) (struct platform_device *pdev);
 	int (*off) (struct platform_device *pdev);
-	int (*late_init) (struct platform_device *pdev);
-	int (*early_off) (struct platform_device *pdev);
 	int (*power_ctrl) (boolean enable);
 	struct platform_device *next;
 	int (*clk_func) (int enable);
-	int (*fps_level_change) (struct platform_device *pdev,
-					u32 fps_level);
 #ifdef CONFIG_FB_MSM_CABC
 	int (*autobl_enable) (int on, struct msm_fb_data_type *);
 	void (*enable_cabc) (int, bool, struct msm_fb_data_type *);
 #endif
 	void (*color_enhance) (struct msm_fb_data_type *, int on);
-	void (*dimming_on) (struct msm_fb_data_type *);
-	void (*acl_enable) (int on, struct msm_fb_data_type *);
-	void (*set_cabc) (struct msm_fb_data_type *, int mode);
-	void (*sre_ctrl) (struct msm_fb_data_type *, unsigned long);
-#ifdef CONFIG_FB_MSM_ESD_WORKAROUND
-	int esd_workaround;
-#endif
 };
 
 struct platform_device *msm_fb_device_alloc(struct msm_fb_panel_data *pdata,
 						u32 type, u32 id);
 int panel_next_on(struct platform_device *pdev);
 int panel_next_off(struct platform_device *pdev);
-int panel_next_fps_level_change(struct platform_device *pdev,
-					u32 fps_level);
-int panel_next_late_init(struct platform_device *pdev);
-int panel_next_early_off(struct platform_device *pdev);
 
 int lcdc_device_register(struct msm_panel_info *pinfo);
 

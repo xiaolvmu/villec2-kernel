@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,54 +13,68 @@
 
 #include "msm_fb.h"
 #include "mipi_dsi.h"
-#include "mipi_toshiba.h"
+#include "mipi_novatek.h"
 
 static struct msm_panel_info pinfo;
 
 static struct mipi_dsi_phy_ctrl dsi_video_mode_phy_db = {
-	
-	
-	{0x03, 0x0a, 0x04, 0x00, 0x20},
-	
-	{0x66, 0x26, 0x1F, 0x00, 0x55, 0x9C, 0x16, 0x90,
-	0x23, 0x03, 0x04, 0xa0},
-	
-	{0x5f, 0x00, 0x00, 0x10},
-	
-	{0xff, 0x00, 0x06, 0x00},
-	
-	{0x0, 0xD7, 0x1, 0x19, 0x00, 0x50, 0x48, 0x63,
-	0x41, 0x0f, 0x01,
-	0x00, 0x14, 0x03, 0x00, 0x02, 0x00, 0x20, 0x00, 0x01 },
+       
+       
+       {0x09, 0x08, 0x05, 0x00, 0x20},
+       
+       {0xA9, 0x18, 0x1A, 0x00, 0x34, 0x38, 0x14,
+       0x1B, 0x15, 0x03, 0x04, 0x00},
+       
+       {0x5F, 0x00, 0x00, 0x10},
+       
+       {0xFF, 0x00, 0x06, 0x00},
+       
+       {0x00, 0x37, 0x30, 0xC4, 0x00, 0x20, 0x0A, 0x62,
+       0x71, 0x88, 0x99,
+       0x00, 0x14, 0x03, 0x00, 0x02, 0x00, 0x20, 0x00, 0x01 },
 };
 
-static int __init mipi_video_toshiba_wuxga_init(void)
+static int __init mipi_video_novatek_wvga_pt_init(void)
 {
 	int ret;
 
-	if (msm_fb_detect_client("mipi_video_toshiba_wuxga"))
+	if (msm_fb_detect_client("mipi_video_novatek_wvga"))
 		return 0;
 
-	pinfo.xres = 1920;
-	pinfo.yres = 1200;
-
+	pinfo.xres = 480;
+	pinfo.yres = 800;
 	pinfo.type = MIPI_VIDEO_PANEL;
 	pinfo.pdest = DISPLAY_1;
 	pinfo.wait_cycle = 0;
 	pinfo.bpp = 24;
-	pinfo.lcdc.h_back_porch = 50;
-	pinfo.lcdc.h_front_porch = 50;
-	pinfo.lcdc.h_pulse_width = 170;
-	pinfo.lcdc.v_back_porch = 7;
-	pinfo.lcdc.v_front_porch = 8;
-	pinfo.lcdc.v_pulse_width = 30;
+	pinfo.width = 56;
+	pinfo.height = 93;
+	pinfo.camera_backlight = 200;
+
+#if defined (CONFIG_MACH_DUMMY)
+    pinfo.lcdc.h_back_porch = 14;
+    pinfo.lcdc.h_front_porch = 16;
+    pinfo.lcdc.h_pulse_width = 4;
+    pinfo.lcdc.v_back_porch = 16;
+    pinfo.lcdc.v_front_porch = 20;
+    pinfo.lcdc.v_pulse_width = 4;
+    pinfo.clk_rate = 312000000;
+#else
+    pinfo.lcdc.h_back_porch = 10;
+    pinfo.lcdc.h_front_porch = 14;
+    pinfo.lcdc.h_pulse_width = 4;
+    pinfo.lcdc.v_back_porch = 10;
+    pinfo.lcdc.v_front_porch = 8;
+    pinfo.lcdc.v_pulse_width = 2;
+    pinfo.clk_rate = 300000000;
+#endif
+
 	pinfo.lcdc.border_clr = 0;	
 	pinfo.lcdc.underflow_clr = 0xff;	
 	pinfo.lcdc.hsync_skew = 0;
-	pinfo.bl_max = MIPI_TOSHIBA_PWM_LEVEL;
+	pinfo.bl_max = 255;
 	pinfo.bl_min = 1;
 	pinfo.fb_num = 2;
-	pinfo.clk_rate = 981560000;
 
 	pinfo.mipi.mode = DSI_VIDEO_MODE;
 	pinfo.mipi.pulse_mode_hsa_he = TRUE;
@@ -75,8 +89,8 @@ static int __init mipi_video_toshiba_wuxga_init(void)
 	pinfo.mipi.rgb_swap = DSI_RGB_SWAP_BGR;
 	pinfo.mipi.data_lane0 = TRUE;
 	pinfo.mipi.data_lane1 = TRUE;
-	pinfo.mipi.data_lane2 = TRUE;
-	pinfo.mipi.data_lane3 = TRUE;
+	pinfo.mipi.esc_byte_ratio = 3;
+
 	pinfo.mipi.tx_eot_append = TRUE;
 	pinfo.mipi.t_clk_post = 0x04;
 	pinfo.mipi.t_clk_pre = 0x1c;
@@ -84,15 +98,15 @@ static int __init mipi_video_toshiba_wuxga_init(void)
 	pinfo.mipi.mdp_trigger = DSI_CMD_TRIGGER_SW;
 	pinfo.mipi.dma_trigger = DSI_CMD_TRIGGER_SW;
 	pinfo.mipi.frame_rate = 60;
-	pinfo.mipi.dsi_phy_db = &dsi_video_mode_phy_db;
-	pinfo.mipi.esc_byte_ratio = 9;
 
-	ret = mipi_toshiba_device_register(&pinfo, MIPI_DSI_PRIM,
-						MIPI_DSI_PANEL_WUXGA);
+	pinfo.mipi.dsi_phy_db = &dsi_video_mode_phy_db;
+
+	ret = mipi_novatek_device_register(&pinfo, MIPI_DSI_PRIM,
+						MIPI_DSI_PANEL_WVGA_PT);
 	if (ret)
-		printk(KERN_ERR "%s: failed to register device!\n", __func__);
+		pr_err("%s: failed to register device!\n", __func__);
 
 	return ret;
 }
 
-module_init(mipi_video_toshiba_wuxga_init);
+module_init(mipi_video_novatek_wvga_pt_init);

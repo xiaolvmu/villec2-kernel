@@ -11,10 +11,8 @@
  *
  */
 
-#ifndef MIPI_NT35510_H
-#define MIPI_NT35510_H
 
-int mipi_nt35510_device_register(struct msm_panel_info *pinfo,
+
+int mipi_himax_device_register(struct msm_panel_info *pinfo,
 					u32 channel, u32 panel);
 
-#endif  
