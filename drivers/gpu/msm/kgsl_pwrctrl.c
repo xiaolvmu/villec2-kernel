@@ -395,37 +395,6 @@ static int kgsl_pwrctrl_max_gpuclk_store(struct device *dev,
 	if (ret != 1)
 		return count;
 
-	if (max_gpu) {
-
-		if (val == 450000000) {
-			SetGPUpll_config(0x21, val);
-		}
-		else if (val == 409500000) {
-			SetGPUpll_config(0x1E, val);
-		}
-		else if (val == 477000000) {
-			SetGPUpll_config(0x23, val);
-		}
-		else if (val == 490500000) {
-			SetGPUpll_config(0x24, val);
-		}
-		else if (val == 504000000) {
-			SetGPUpll_config(0x25, val);
-		}
-		else if (val == 531000000) {
-			SetGPUpll_config(0x27, val);
-		}
-		else if (val == 558000000) {
-			SetGPUpll_config(0x29, val);
-		}
-		else if (val == 585000000) {
-			SetGPUpll_config(0x2B, val);
-		}
-	
-		internal_max = val;
-
-	}	
-	
 	mutex_lock(&device->mutex);
 	level = _get_nearest_pwrlevel(pwr, val);
 	if (level < 0)
@@ -452,13 +421,8 @@ static int kgsl_pwrctrl_max_gpuclk_show(struct device *dev,
 	if (device == NULL)
 		return 0;
 	pwr = &device->pwrctrl;
-
-	if (max_gpu)
-		return snprintf(buf, PAGE_SIZE, "%ld\n",
-				internal_max);
-	else
-		return snprintf(buf, PAGE_SIZE, "%d\n",
-				pwr->pwrlevels[pwr->thermal_pwrlevel].gpu_freq);
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+			pwr->pwrlevels[pwr->thermal_pwrlevel].gpu_freq);
 }
 
 static int kgsl_pwrctrl_gpuclk_store(struct device *dev,
@@ -497,12 +461,8 @@ static int kgsl_pwrctrl_gpuclk_show(struct device *dev,
 	if (device == NULL)
 		return 0;
 	pwr = &device->pwrctrl;
-	if (pwr->active_pwrlevel != 0 || !max_gpu)
-		return snprintf(buf, PAGE_SIZE, "%d\n",
+	return snprintf(buf, PAGE_SIZE, "%d\n",
 			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq);
-	else
-		return snprintf(buf, PAGE_SIZE, "%ld\n",
-			internal_max);
 }
 
 static int kgsl_pwrctrl_pwrnap_store(struct device *dev,
@@ -708,20 +668,8 @@ static int kgsl_pwrctrl_gpu_available_frequencies_show(
 		return 0;
 	pwr = &device->pwrctrl;
 	for (index = 0; index < pwr->num_pwrlevels - 1; index++)
-
-		if (index == 0 && max_gpu > 0)
-		{
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",585000000);
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",558000000);
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",531000000);
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",504000000);
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",490500000);
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",477000000);
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",450000000);
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",409500000);
-		}
-		else
-			num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",pwr->pwrlevels[index].gpu_freq);
+		num_chars += snprintf(buf + num_chars, PAGE_SIZE, "%d ",
+		pwr->pwrlevels[index].gpu_freq);
 	buf[num_chars++] = '\n';
 	return num_chars;
 }
@@ -1042,8 +990,7 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	if (pdata->set_grp_async != NULL)
 		pdata->set_grp_async();
 
-	if (pdata->num_levels > KGSL_MAX_PWRLEVELS ||
-	    pdata->num_levels < 1) {
+	if (pdata->num_levels > KGSL_MAX_PWRLEVELS) {
 		KGSL_PWR_ERR(device, "invalid power level count: %d\n",
 					 pdata->num_levels);
 		result = -EINVAL;
@@ -1051,14 +998,13 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	}
 	pwr->num_pwrlevels = pdata->num_levels;
 
-	
-
 	pwr->max_pwrlevel = 0;
 	pwr->min_pwrlevel = pdata->num_levels - 2;
 	pwr->thermal_pwrlevel = 0;
 
 	pwr->active_pwrlevel = pdata->init_level;
 	pwr->default_pwrlevel = pdata->init_level;
+	pwr->thermal_pwrlevel = pdata->init_level;
 	for (i = 0; i < pdata->num_levels; i++) {
 		pwr->pwrlevels[i].gpu_freq =
 		(pdata->pwrlevel[i].gpu_freq > 0) ?
@@ -1070,8 +1016,6 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 		pwr->pwrlevels[i].io_fraction =
 			pdata->pwrlevel[i].io_fraction;
 	}
-	if (strstr(device->name, "kgsl-3d") != NULL)
-		set_gpu_clk(pwr->pwrlevels[0].gpu_freq);
 	
 	if (pwr->pwrlevels[0].gpu_freq > 0)
 		clk_set_rate(pwr->grp_clks[0], pwr->
