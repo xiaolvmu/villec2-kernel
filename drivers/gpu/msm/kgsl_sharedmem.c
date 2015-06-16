@@ -414,28 +414,31 @@ static int kgsl_page_alloc_vmflags(struct kgsl_memdesc *memdesc)
 
 static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 {
-	int i = 0, j, size;
+	int i = 0;
 	struct scatterlist *sg;
 	int sglen = memdesc->sglen;
+
+	
+	if (memdesc->priv & KGSL_MEMDESC_GUARD_PAGE)
+		sglen--;
 
 	kgsl_driver.stats.page_alloc -= memdesc->size;
 
 	if (memdesc->hostptr) {
 		vunmap(memdesc->hostptr);
 		kgsl_driver.stats.vmalloc -= memdesc->size;
-		kgsl_driver.stats.page_alloc_kernel -= memdesc->size;
 	}
 	if (memdesc->sg)
 		for_each_sg(memdesc->sg, sg, sglen, i){
 			if (sg->length == 0)
 				break;
-			size = 1 << get_order(sg->length);
-			for (j = 0; j < size; j++)
-				ClearPageKgsl(nth_page(sg_page(sg), j));
 			__free_pages(sg_page(sg), get_order(sg->length));
 		}
+
 	if (memdesc->private)
 		kgsl_process_sub_stats(memdesc->private, KGSL_MEM_ENTRY_PAGE_ALLOC, memdesc->size);
+	else
+		kgsl_driver.stats.page_alloc_kernel -= memdesc->size;
 }
 
 static int kgsl_contiguous_vmflags(struct kgsl_memdesc *memdesc)
