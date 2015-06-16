@@ -160,7 +160,6 @@ static int lightsensor_disable(struct cm3629_info *lpi);
 static void psensor_initial_cmd(struct cm3629_info *lpi);
 static int ps_near;
 static int pocket_mode_flag, psensor_enable_by_touch;
-int current_lightsensor_adc;
 #if (0)
 static int I2C_RxData(uint16_t slaveAddr, uint8_t *rxData, int length)
 {
@@ -2677,12 +2676,6 @@ static int __init cm3629_init(void)
 static void __exit cm3629_exit(void)
 {
 	i2c_del_driver(&cm3629_driver);
-}
-
-int get_lightsensoradc(void)
-{
-	return current_lightsensor_adc;
-
 }
 
 module_init(cm3629_init);
