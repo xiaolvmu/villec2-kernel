@@ -412,6 +412,7 @@ static inline struct sched_domain *highest_flag_domain(int cpu, int flag)
 }
 
 DECLARE_PER_CPU(struct sched_domain *, sd_llc);
+DECLARE_PER_CPU(int, sd_llc_size);
 DECLARE_PER_CPU(int, sd_llc_id);
 
 #endif 
@@ -423,7 +424,15 @@ DECLARE_PER_CPU(int, sd_llc_id);
 
 static inline struct task_group *task_group(struct task_struct *p)
 {
-	return p->sched_task_group;
+	struct task_group *tg;
+	struct cgroup_subsys_state *css;
+
+	css = task_subsys_state_check(p, cpu_cgroup_subsys_id,
+			lockdep_is_held(&p->pi_lock) ||
+			lockdep_is_held(&task_rq(p)->lock));
+	tg = container_of(css, struct task_group, css);
+
+	return autogroup_task_group(p, tg);
 }
 
 static inline void set_task_rq(struct task_struct *p, unsigned int cpu)
@@ -676,7 +685,6 @@ extern void sysrq_sched_debug_show(void);
 extern void sched_init_granularity(void);
 extern void update_max_interval(void);
 extern void update_group_power(struct sched_domain *sd, int cpu);
-extern int update_runtime(struct notifier_block *nfb, unsigned long action, void *hcpu);
 extern void init_sched_rt_class(void);
 extern void init_sched_fair_class(void);
 
@@ -901,9 +909,10 @@ extern void print_rt_stats(struct seq_file *m, int cpu);
 
 extern void init_cfs_rq(struct cfs_rq *cfs_rq);
 extern void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq);
-extern void unthrottle_offline_cfs_rqs(struct rq *rq);
 
 extern void account_cfs_bandwidth_used(int enabled, int was_enabled);
+
+void requeue_rt_rq_tasks(struct rq *rq);
 
 #ifdef CONFIG_NO_HZ
 enum rq_nohz_flag_bits {

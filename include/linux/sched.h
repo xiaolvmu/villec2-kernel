@@ -223,6 +223,7 @@ static inline void set_cpu_sd_state_idle(void) { }
 #endif
 
 extern void show_state_filter(unsigned long state_filter);
+extern void show_thread_group_state_filter(const char *tg_comm, unsigned long state_filter);
 
 static inline void show_state(void)
 {
@@ -1009,6 +1010,9 @@ struct task_struct {
 #ifdef CONFIG_SMP
 	struct llist_node wake_entry;
 	int on_cpu;
+	struct task_struct *last_wakee;
+	unsigned long wakee_flips;
+	unsigned long wakee_flip_decay_ts;
 #endif
 	int on_rq;
 
@@ -1017,9 +1021,6 @@ struct task_struct {
 	const struct sched_class *sched_class;
 	struct sched_entity se;
 	struct sched_rt_entity rt;
-#ifdef CONFIG_CGROUP_SCHED
-	struct task_group *sched_task_group;
-#endif
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	
@@ -1172,6 +1173,8 @@ struct task_struct {
 #ifdef CONFIG_DEBUG_MUTEXES
 	
 	struct mutex_waiter *blocked_on;
+	struct task_struct  *blocked_by;
+	unsigned long        blocked_since;
 #endif
 #ifdef CONFIG_TRACE_IRQFLAGS
 	unsigned int irq_events;
@@ -1640,6 +1643,7 @@ extern unsigned int sysctl_sched_latency;
 extern unsigned int sysctl_sched_min_granularity;
 extern unsigned int sysctl_sched_wakeup_granularity;
 extern unsigned int sysctl_sched_child_runs_first;
+extern unsigned int sysctl_sched_wake_to_idle;
 
 enum sched_tunable_scaling {
 	SCHED_TUNABLESCALING_NONE,
@@ -2185,7 +2189,16 @@ static inline void thread_group_cputime_init(struct signal_struct *sig)
 extern void recalc_sigpending_and_wake(struct task_struct *t);
 extern void recalc_sigpending(void);
 
-extern void signal_wake_up(struct task_struct *t, int resume_stopped);
+extern void signal_wake_up_state(struct task_struct *t, unsigned int state);
+
+static inline void signal_wake_up(struct task_struct *t, bool resume)
+{
+	signal_wake_up_state(t, resume ? TASK_WAKEKILL : 0);
+}
+static inline void ptrace_signal_wake_up(struct task_struct *t, bool resume)
+{
+	signal_wake_up_state(t, resume ? __TASK_TRACED : 0);
+}
 
 #ifdef CONFIG_SMP
 
@@ -2234,7 +2247,7 @@ extern int sched_group_set_rt_period(struct task_group *tg,
 extern long sched_group_rt_period(struct task_group *tg);
 extern int sched_rt_can_attach(struct task_group *tg, struct task_struct *tsk);
 #endif
-#endif /* CONFIG_CGROUP_SCHED */
+#endif
 
 extern int task_can_switch_user(struct user_struct *up,
 					struct task_struct *tsk);

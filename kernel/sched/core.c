@@ -517,7 +517,19 @@ void wake_up_idle_cpu(int cpu)
 static inline bool got_nohz_idle_kick(void)
 {
 	int cpu = smp_processor_id();
-	return idle_cpu(cpu) && test_bit(NOHZ_BALANCE_KICK, nohz_flags(cpu));
+
+	if (!test_bit(NOHZ_BALANCE_KICK, nohz_flags(cpu)))
+		return false;
+
+	if (idle_cpu(cpu) && !need_resched())
+		return true;
+
+	/*
+	 * We can't run Idle Load Balance on this CPU for this time so we
+	 * cancel it and clear NOHZ_BALANCE_KICK
+	 */
+	clear_bit(NOHZ_BALANCE_KICK, nohz_flags(cpu));
+	return false;
 }
 
 #else 
@@ -1183,7 +1195,7 @@ void scheduler_ipi(void)
 	irq_enter();
 	sched_ttwu_pending();
 
-	if (unlikely(got_nohz_idle_kick() && !need_resched())) {
+	if (unlikely(got_nohz_idle_kick())) {
 		this_rq()->idle_balance = 1;
 		raise_softirq_irqoff(SCHED_SOFTIRQ);
 	}
@@ -2241,29 +2253,19 @@ void thread_group_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
 # define nsecs_to_cputime(__nsecs)	nsecs_to_jiffies(__nsecs)
 #endif
 
-static cputime_t scale_utime(cputime_t utime, cputime_t rtime, cputime_t total)
-{
-	u64 temp = (__force u64) rtime;
-
-	temp *= (__force u64) utime;
-
-	if (sizeof(cputime_t) == 4)
-		temp = div_u64(temp, (__force u32) total);
-	else
-		temp = div64_u64(temp, (__force u64) total);
-
-	return (__force cputime_t) temp;
-}
-
 void task_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
 {
 	cputime_t rtime, utime = p->utime, total = utime + p->stime;
 
 	rtime = nsecs_to_cputime(p->se.sum_exec_runtime);
 
-	if (total)
-		utime = scale_utime(utime, rtime, total);
-	else
+	if (total) {
+		u64 temp = (__force u64) rtime;
+
+		temp *= (__force u64) utime;
+		do_div(temp, (__force u32) total);
+		utime = (__force cputime_t) temp;
+	} else
 		utime = rtime;
 
 	p->prev_utime = max(p->prev_utime, utime);
@@ -2284,9 +2286,13 @@ void thread_group_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
 	total = cputime.utime + cputime.stime;
 	rtime = nsecs_to_cputime(cputime.sum_exec_runtime);
 
-	if (total)
-		utime = scale_utime(cputime.utime, rtime, total);
-	else
+	if (total) {
+		u64 temp = (__force u64) rtime;
+
+		temp *= (__force u64) cputime.utime;
+		do_div(temp, (__force u32) total);
+		utime = (__force cputime_t) temp;
+	} else
 		utime = rtime;
 
 	sig->prev_utime = max(sig->prev_utime, utime);
@@ -2671,7 +2677,8 @@ void complete_all(struct completion *x)
 EXPORT_SYMBOL(complete_all);
 
 static inline long __sched
-do_wait_for_common(struct completion *x, long timeout, int state, int iowait)
+do_wait_for_common(struct completion *x,
+		   long (*action)(long), long timeout, int state)
 {
 	if (!x->done) {
 		DECLARE_WAITQUEUE(wait, current);
@@ -2684,10 +2691,7 @@ do_wait_for_common(struct completion *x, long timeout, int state, int iowait)
 			}
 			__set_current_state(state);
 			spin_unlock_irq(&x->wait.lock);
-			if (iowait)
-				timeout = io_schedule_timeout(timeout);
-			else
-				timeout = schedule_timeout(timeout);
+			timeout = action(timeout);
 			spin_lock_irq(&x->wait.lock);
 		} while (!x->done && timeout);
 		__remove_wait_queue(&x->wait, &wait);
@@ -2698,26 +2702,39 @@ do_wait_for_common(struct completion *x, long timeout, int state, int iowait)
 	return timeout ?: 1;
 }
 
-static long __sched
-wait_for_common(struct completion *x, long timeout, int state, int iowait)
+static inline long __sched
+__wait_for_common(struct completion *x,
+		long (*action)(long), long timeout, int state)
 {
 	might_sleep();
 
 	spin_lock_irq(&x->wait.lock);
-	timeout = do_wait_for_common(x, timeout, state, iowait);
+	timeout = do_wait_for_common(x, action, timeout, state);
 	spin_unlock_irq(&x->wait.lock);
 	return timeout;
 }
 
+static long __sched
+wait_for_common(struct completion *x, long timeout, int state)
+{
+	return __wait_for_common(x, schedule_timeout, timeout, state);
+}
+
+static long __sched
+wait_for_common_io(struct completion *x, long timeout, int state)
+{
+	return __wait_for_common(x, io_schedule_timeout, timeout, state);
+}
+
 void __sched wait_for_completion(struct completion *x)
 {
-	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE, 0);
+	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion);
 
 void __sched wait_for_completion_io(struct completion *x)
 {
-	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE, 1);
+	wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion_io);
 
@@ -2725,14 +2742,33 @@ EXPORT_SYMBOL(wait_for_completion_io);
 unsigned long __sched
 wait_for_completion_timeout(struct completion *x, unsigned long timeout)
 {
-	return wait_for_common(x, timeout, TASK_UNINTERRUPTIBLE, 0);
+	return wait_for_common(x, timeout, TASK_UNINTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion_timeout);
+
+/**
+ * wait_for_completion_io_timeout: - waits for completion of a task (w/timeout)
+ * @x:  holds the state of this particular completion
+ * @timeout:  timeout value in jiffies
+ *
+ * This waits for either a completion of a specific task to be signaled or for a
+ * specified timeout to expire. The timeout is in jiffies. It is not
+ * interruptible. The caller is accounted as waiting for IO.
+ *
+ * The return value is 0 if timed out, and positive (at least 1, or number of
+ * jiffies left till timeout) if completed.
+ */
+unsigned long __sched
+wait_for_completion_io_timeout(struct completion *x, unsigned long timeout)
+{
+	return wait_for_common_io(x, timeout, TASK_UNINTERRUPTIBLE);
+}
+EXPORT_SYMBOL(wait_for_completion_io_timeout);
 
 int __sched wait_for_completion_interruptible(struct completion *x)
 {
 	long t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT,
-				 TASK_INTERRUPTIBLE, 0);
+				 TASK_INTERRUPTIBLE);
 	if (t == -ERESTARTSYS)
 		return t;
 	return 0;
@@ -2743,13 +2779,13 @@ long __sched
 wait_for_completion_interruptible_timeout(struct completion *x,
 					  unsigned long timeout)
 {
-	return wait_for_common(x, timeout, TASK_INTERRUPTIBLE, 0);
+	return wait_for_common(x, timeout, TASK_INTERRUPTIBLE);
 }
 EXPORT_SYMBOL(wait_for_completion_interruptible_timeout);
 
 int __sched wait_for_completion_killable(struct completion *x)
 {
-	long t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_KILLABLE, 0);
+	long t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_KILLABLE);
 	if (t == -ERESTARTSYS)
 		return t;
 	return 0;
@@ -2760,7 +2796,7 @@ long __sched
 wait_for_completion_killable_timeout(struct completion *x,
 				     unsigned long timeout)
 {
-	return wait_for_common(x, timeout, TASK_KILLABLE, 0);
+	return wait_for_common(x, timeout, TASK_KILLABLE);
 }
 EXPORT_SYMBOL(wait_for_completion_killable_timeout);
 
@@ -3156,7 +3192,7 @@ int sched_setscheduler(struct task_struct *p, int policy,
 {
 	return __sched_setscheduler(p, policy, param, true);
 }
-EXPORT_SYMBOL_GPL(sched_setscheduler);
+EXPORT_SYMBOL(sched_setscheduler);
 
 int sched_setscheduler_nocheck(struct task_struct *p, int policy,
 			       const struct sched_param *param)
@@ -3310,7 +3346,7 @@ out_put_task:
 	put_online_cpus();
 	return retval;
 }
-
+EXPORT_SYMBOL_GPL(sched_setaffinity);
 static int get_user_cpu_mask(unsigned long __user *user_mask_ptr, unsigned len,
 			     struct cpumask *new_mask)
 {
@@ -3649,14 +3685,32 @@ void sched_show_task(struct task_struct *p)
 #ifdef CONFIG_DEBUG_STACK_USAGE
 	free = stack_not_used(p);
 #endif
-	printk(KERN_CONT "%5lu %5d %6d 0x%08lx\n", free,
+	printk(KERN_CONT "%5lu %5d %6d 0x%08lx c%d %llu\n", free,
 		task_pid_nr(p), task_pid_nr(rcu_dereference(p->real_parent)),
-		(unsigned long)task_thread_info(p)->flags);
+		(unsigned long)task_thread_info(p)->flags, p->on_cpu,
+#if defined(CONFIG_SCHEDSTATS) || defined(CONFIG_TASK_DELAY_ACCT)
+		div64_u64(task_rq(p)->clock - p->sched_info.last_arrival, NSEC_PER_MSEC));
+#else
+		(unsigned long long)0);
+#endif
+
+#if defined(CONFIG_DEBUG_MUTEXES)
+	if (state == TASK_UNINTERRUPTIBLE)
+		if (p->blocked_by)
+			printk(KERN_CONT "  blocked by %s (%d) for %u ms\n",
+				p->blocked_by->comm, p->blocked_by->tgid,
+				jiffies_to_msecs(jiffies - p->blocked_since));
+#endif
 
 	show_stack(p, NULL);
 }
 
 void show_state_filter(unsigned long state_filter)
+{
+	show_thread_group_state_filter(NULL, state_filter);
+}
+
+void show_thread_group_state_filter(const char *tg_comm, unsigned long state_filter)
 {
 	struct task_struct *g, *p;
 
@@ -3670,8 +3724,10 @@ void show_state_filter(unsigned long state_filter)
 	rcu_read_lock();
 	do_each_thread(g, p) {
 		touch_nmi_watchdog();
-		if (!state_filter || (p->state & state_filter))
-			sched_show_task(p);
+		if (!tg_comm || (tg_comm && !strncmp(tg_comm, g->comm, TASK_COMM_LEN))) {
+			if (!state_filter || (p->state & state_filter))
+				sched_show_task(p);
+		}
 	} while_each_thread(g, p);
 
 	touch_all_softlockup_watchdogs();
@@ -3689,14 +3745,6 @@ void init_idle_bootup_task(struct task_struct *idle)
 	idle->sched_class = &idle_sched_class;
 }
 
-/**
- * init_idle - set up an idle thread for a given CPU
- * @idle: task in question
- * @cpu: cpu the idle task belongs to
- *
- * NOTE: this function does not set the idle thread's NEED_RESCHED
- * flag, to make booting more robust.
- */
 void init_idle(struct task_struct *idle, int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
@@ -3841,18 +3889,11 @@ void idle_task_exit(void)
 	mmdrop(mm);
 }
 
-static void migrate_nr_uninterruptible(struct rq *rq_src)
+static void calc_load_migrate(struct rq *rq)
 {
-	struct rq *rq_dest = cpu_rq(cpumask_any(cpu_active_mask));
-
-	rq_dest->nr_uninterruptible += rq_src->nr_uninterruptible;
-	rq_src->nr_uninterruptible = 0;
-}
-
-static void calc_global_load_remove(struct rq *rq)
-{
-	atomic_long_sub(rq->calc_load_active, &calc_load_tasks);
-	rq->calc_load_active = 0;
+	long delta = calc_load_fold_active(rq);
+	if (delta)
+		atomic_long_add(delta, &calc_load_tasks);
 }
 
 static void migrate_tasks(unsigned int dead_cpu)
@@ -3863,12 +3904,15 @@ static void migrate_tasks(unsigned int dead_cpu)
 
 	rq->stop = NULL;
 
-	
-	unthrottle_offline_cfs_rqs(rq);
-
 	for ( ; ; ) {
 		if (rq->nr_running == 1)
 			break;
+
+
+		if ((rq->cfs.nr_running == 0) && (rq->rt.rt_nr_running == 0)) {
+			requeue_rt_rq_tasks(rq);
+			continue;
+		}
 
 		next = pick_next_task(rq);
 		BUG_ON(!next);
@@ -4077,10 +4121,6 @@ static void set_rq_offline(struct rq *rq)
 	}
 }
 
-/*
- * migration_call - callback that gets triggered when a CPU is added.
- * Here we can start up the necessary migration thread for the new CPU.
- */
 static int
 migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 {
@@ -4117,9 +4157,10 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 		migrate_tasks(cpu);
 		BUG_ON(rq->nr_running != 1); 
 		raw_spin_unlock_irqrestore(&rq->lock, flags);
+		break;
 
-		migrate_nr_uninterruptible(rq);
-		calc_global_load_remove(rq);
+	case CPU_DEAD:
+		calc_load_migrate(rq);
 		break;
 #endif
 	}
@@ -4129,11 +4170,6 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	return NOTIFY_OK;
 }
 
-/*
- * Register at high priority so that task migration (migrate_all_tasks)
- * happens before everything else.  This has to be lower priority than
- * the notifier in the perf_event subsystem, though.
- */
 static struct notifier_block migration_notifier = {
 	.notifier_call = migration_call,
 	.priority = CPU_PRI_MIGRATION,
@@ -4496,18 +4532,23 @@ static void destroy_sched_domains(struct sched_domain *sd, int cpu)
 }
 
 DEFINE_PER_CPU(struct sched_domain *, sd_llc);
+DEFINE_PER_CPU(int, sd_llc_size);
 DEFINE_PER_CPU(int, sd_llc_id);
 
 static void update_top_cache_domain(int cpu)
 {
 	struct sched_domain *sd;
 	int id = cpu;
+	int size = 1;
 
 	sd = highest_flag_domain(cpu, SD_SHARE_PKG_RESOURCES);
-	if (sd)
+	if (sd) {
 		id = cpumask_first(sched_domain_span(sd));
+		size = cpumask_weight(sched_domain_span(sd));
+	}
 
 	rcu_assign_pointer(per_cpu(sd_llc, cpu), sd);
+	per_cpu(sd_llc_size, cpu) = size;
 	per_cpu(sd_llc_id, cpu) = id;
 }
 
@@ -5407,9 +5448,6 @@ void __init sched_init_smp(void)
 	hotcpu_notifier(cpuset_cpu_active, CPU_PRI_CPUSET_ACTIVE);
 	hotcpu_notifier(cpuset_cpu_inactive, CPU_PRI_CPUSET_INACTIVE);
 
-	
-	hotcpu_notifier(update_runtime, 0);
-
 	init_hrtick();
 
 	
@@ -5782,7 +5820,6 @@ void sched_destroy_group(struct task_group *tg)
 
 void sched_move_task(struct task_struct *tsk)
 {
-	struct task_group *tg;
 	int on_rq, running;
 	unsigned long flags;
 	struct rq *rq;
@@ -5796,12 +5833,6 @@ void sched_move_task(struct task_struct *tsk)
 		dequeue_task(rq, tsk, 0);
 	if (unlikely(running))
 		tsk->sched_class->put_prev_task(rq, tsk);
-
-	tg = container_of(task_subsys_state_check(tsk, cpu_cgroup_subsys_id,
-				lockdep_is_held(&tsk->sighand->siglock)),
-			  struct task_group, css);
-	tg = autogroup_task_group(tsk, tg);
-	tsk->sched_task_group = tg;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	if (tsk->sched_class->task_move_group)
