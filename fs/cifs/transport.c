@@ -621,7 +621,7 @@ SendReceive(const unsigned int xid, struct cifs_ses *ses,
 	    int *pbytes_returned, const int long_op)
 {
 	int rc = 0;
-	struct mid_q_entry *midQ;
+	struct mid_q_entry *midQ = NULL;
 
 	if (ses == NULL) {
 		cERROR(1, "Null smb session");
@@ -741,7 +741,7 @@ SendReceiveBlockingLock(const unsigned int xid, struct cifs_tcon *tcon,
 {
 	int rc = 0;
 	int rstart = 0;
-	struct mid_q_entry *midQ;
+	struct mid_q_entry *midQ = NULL;
 	struct cifs_ses *ses;
 
 	if (tcon == NULL || tcon->ses == NULL) {

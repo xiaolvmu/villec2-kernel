@@ -321,7 +321,7 @@ static int mt9v113_i2c_write_bit(unsigned short saddr, unsigned short raddr,
 unsigned short bit, unsigned short state)
 {
 	int rc;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 	unsigned short check_bit;
 
 	if (state)
@@ -351,9 +351,9 @@ unsigned short bit, unsigned short state)
 static int mt9v113_i2c_check_bit(unsigned short saddr, unsigned short raddr,
 unsigned short bit, int check_state)
 {
-	int k;
-	unsigned short check_value;
-	unsigned short check_bit;
+	int k = 0;
+	unsigned short check_value = 0;
+	unsigned short check_bit = 0;
 	check_bit = 0x0001 << bit;
 	for (k = 0; k < CHECK_STATE_TIME; k++) {
 		mt9v113_i2c_read_w(mt9v113_client->addr,
@@ -377,7 +377,7 @@ unsigned short bit, int check_state)
 static inline int resume(void)
 {
 	int k = 0, rc = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
 	
 	
@@ -492,7 +492,7 @@ static inline int resume(void)
 static inline int suspend(void)
 {
 	int k = 0, rc = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
 	
 	
@@ -551,7 +551,7 @@ static inline int suspend(void)
 static int mt9v113_reg_init(void)
 {
 	int rc = 0, k = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
     
 	pr_info("%s: Power Up Start\n", __func__);
@@ -833,7 +833,7 @@ static int mt9v113_set_front_camera_mode(enum frontcam_t frontcam_value)
 {
 	int rc = 0;
 	int k = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
 	if (op_mode == SENSOR_SNAPSHOT_MODE)
 		return 0;
@@ -1345,7 +1345,7 @@ static int mt9v113_set_contrast(enum contrast_mode contrast_value)
 static int mt9v113_set_effect(int effect)
 {
 	int rc = 0, k = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
 	if (op_mode == SENSOR_SNAPSHOT_MODE)
 		return 0;
@@ -1593,7 +1593,7 @@ static int mt9v113_set_brightness(enum brightness_t brightness_value)
 static int mt9v113_set_wb(enum wb_mode wb_value)
 {
 	int rc = 0, k = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
 	if (op_mode == SENSOR_SNAPSHOT_MODE)
 		return 0;
@@ -1749,7 +1749,7 @@ static int mt9v113_set_wb(enum wb_mode wb_value)
 static int mt9v113_get_iso(uint16_t *real_iso_value)
 {
 	int rc = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
 	
 	*real_iso_value = 400;
@@ -1768,7 +1768,7 @@ static int mt9v113_get_iso(uint16_t *real_iso_value)
 static int mt9v113_set_iso(enum iso_mode iso_value)
 {
 	int rc = 0, k = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 	pr_info("%s: iso_value =%d\n", __func__, iso_value);
 
 	switch (iso_value) {
@@ -2102,7 +2102,7 @@ static int mt9v113_init_client(struct i2c_client *client)
 static int mt9v113_detect_sensor_status(void)
 {
 	int rc = 0, k = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
 	for (k = 0; k < CHECK_STATE_TIME; k++) {	
 		rc = mt9v113_i2c_write(mt9v113_client->addr, 0x098C,

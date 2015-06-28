@@ -152,7 +152,6 @@ config DEFAULT_IOSCHED
 	default "noop" if DEFAULT_NOOP
 	default "fiops" if DEFAULT_FIOPS
 	default "sio" if DEFAULT_SIO
-	default "fiops" if DEFAULT_FIOPS
 	default "zen" if DEFAULT_ZEN
 	default "vr" if DEFAULT_VR
 	default "fifo" if DEFAULT_FIFO

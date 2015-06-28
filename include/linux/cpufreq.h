@@ -171,13 +171,6 @@ void cpufreq_unregister_governor(struct cpufreq_governor *governor);
 int lock_policy_rwsem_write(int cpu);
 void unlock_policy_rwsem_write(int cpu);
 
-#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND
-extern void ondemand_boost_cpu(int boost);
-
-#endif
-
-
-
 #define CPUFREQ_RELATION_L 0  
 #define CPUFREQ_RELATION_H 1  
 

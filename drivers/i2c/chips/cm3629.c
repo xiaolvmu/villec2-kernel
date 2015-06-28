@@ -719,7 +719,7 @@ static void enable_ps_interrupt(char *ps_conf)
 static void sensor_irq_do_work(struct work_struct *work)
 {
 	struct cm3629_info *lpi = lp_info;
-	uint8_t cmd[3];
+	uint8_t cmd[3] = {0, 0, 0};
 	uint8_t add = 0;
 
 	

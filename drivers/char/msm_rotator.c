@@ -901,6 +901,7 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	struct ion_handle *srcp0_ihdl = NULL, *dstp0_ihdl = NULL;
 	struct ion_handle *srcp1_ihdl = NULL, *dstp1_ihdl = NULL;
 	int ps0_need, p_need;
+	int ps0_need = 0, p_need = 0;
 	unsigned int in_chroma_paddr = 0, out_chroma_paddr = 0;
 	unsigned int in_chroma2_paddr = 0;
 	struct msm_rotator_img_info *img_info;
