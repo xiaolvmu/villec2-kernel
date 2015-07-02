@@ -378,6 +378,8 @@ int ion_unsecure_heap(struct ion_device *dev, int heap_id, int version,
 int msm_ion_do_cache_op(struct ion_client *client, struct ion_handle *handle,
 			void *vaddr, unsigned long len, unsigned int cmd);
 
+int ion_iommu_heap_dump_size(void);
+
 #else
 static inline void ion_reserve(struct ion_platform_data *data)
 {

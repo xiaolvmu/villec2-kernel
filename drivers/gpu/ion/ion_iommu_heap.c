@@ -58,6 +58,8 @@ struct page_info {
 	struct list_head list;
 };
 
+atomic_t v = ATOMIC_INIT(0);
+
 static unsigned int order_to_size(int order)
 {
 	return PAGE_SIZE << order;
@@ -275,6 +277,12 @@ static void ion_iommu_heap_free(struct ion_buffer *buffer)
 	else
 		kfree(data->pages);
 	kfree(data);
+}
+
+int ion_iommu_heap_dump_size(void)
+{
+	int ret = atomic_read(&v);
+	return ret;
 }
 
 void *ion_iommu_heap_map_kernel(struct ion_heap *heap,
