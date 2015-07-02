@@ -2331,7 +2331,7 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 }
 #endif 
 
-static int __devinit cpu_callback(struct notifier_block *nfb,
+static int cpu_callback(struct notifier_block *nfb,
 				  unsigned long action, void *hcpu)
 {
 	int nid;
