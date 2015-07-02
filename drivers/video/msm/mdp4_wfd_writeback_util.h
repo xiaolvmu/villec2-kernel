@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -11,8 +11,18 @@
  *
  */
 
+#ifndef _WRITEBACK_UTIL_H_
+#define _WRITEBACK_UTIL_H_
 
+#define DEBUG
 
-int mipi_himax_device_register(struct msm_panel_info *pinfo,
-					u32 channel, u32 panel);
-
+#ifdef DEBUG
+	#define WRITEBACK_MSG_INFO(fmt...) pr_info(fmt)
+	#define WRITEBACK_MSG_WARN(fmt...) pr_warning(fmt)
+#else
+	#define WRITEBACK_MSG_INFO(fmt...)
+	#define WRITEBACK_MSG_WARN(fmt...)
+#endif
+	#define WRITEBACK_MSG_ERR(fmt...) pr_err(fmt)
+	#define WRITEBACK_MSG_CRIT(fmt...) pr_crit(fmt)
+#endif

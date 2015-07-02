@@ -1,5 +1,4 @@
 /*  Copyright (c) 2002-2010, Silicon Image, Inc.  All rights reserved.             */
-/*  or by any means without written permission of: Silicon Image, Inc.,            */
 
 #include "TypeDefs.h"
 #include "mhl_defs.h"
