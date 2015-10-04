@@ -5079,9 +5079,9 @@ static struct ion_co_heap_pdata co_ion_pdata = {
 };
 #endif
 
-struct ion_platform_heap msm8660_heaps[] = {
-
-
+static struct ion_platform_data ion_pdata = {
+	.nr = MSM_ION_HEAP_NUM,
+	.heaps = {
 		{
 			.id	= ION_SYSTEM_HEAP_ID,
 			.type	= ION_HEAP_TYPE_SYSTEM,

@@ -73,8 +73,6 @@ __mutex_fastpath_unlock(atomic_t *count, void (*fail_fn)(atomic_t *))
 		fail_fn(count);
 }
 
-#define __mutex_slowpath_needs_to_unlock()		0
-
 /**
  * __mutex_fastpath_trylock - try to acquire the mutex, without waiting
  *
