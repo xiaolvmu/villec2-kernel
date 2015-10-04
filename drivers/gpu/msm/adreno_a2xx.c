@@ -1068,14 +1068,6 @@ build_shader_save_restore_cmds(struct adreno_device *adreno_dev,
 	
 	create_ib1(drawctxt, drawctxt->shader_restore, restore, cmd);
 
-	/*
-	 *  fixup SET_SHADER_BASES data
-	 *
-	 *  since self-modifying PM4 code is being used here, a seperate
-	 *  command buffer is used for this fixup operation, to ensure the
-	 *  commands are not read by the PM4 engine before the data fields
-	 *  have been written.
-	 */
 
 	fixup = cmd;		
 

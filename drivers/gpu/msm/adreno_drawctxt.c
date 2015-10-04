@@ -180,8 +180,7 @@ void adreno_drawctxt_destroy(struct kgsl_device *device,
 		adreno_drawctxt_switch(adreno_dev, NULL, 0);
 	}
 
-	if (device->state != KGSL_STATE_HUNG)
-		adreno_idle(device);
+	adreno_idle(device, KGSL_TIMEOUT_DEFAULT);
 
 	if (adreno_is_a20x(adreno_dev) && adreno_dev->drawctxt_active)
 		kgsl_setstate(&device->mmu, adreno_dev->drawctxt_active->id,

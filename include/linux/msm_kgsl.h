@@ -42,7 +42,7 @@ enum kgsl_ctx_reset_stat {
 	KGSL_CTX_STAT_UNKNOWN_CONTEXT_RESET_EXT		= 0x00000003
 };
 
-
+#define KGSL_MAX_PWRLEVELS 5
 
 #define KGSL_CONVERT_TO_MBPS(val) \
 	(val*1000*1000U)
@@ -72,10 +72,6 @@ struct kgsl_devinfo {
 	unsigned int gmem_sizebytes;
 };
 
-/* this structure defines the region of memory that can be mmap()ed from this
-   driver. The timestamp fields are volatile because they are written by the
-   GPU
-*/
 struct kgsl_devmemstore {
 	volatile unsigned int soptimestamp;
 	unsigned int sbz;
@@ -171,7 +167,6 @@ struct kgsl_device_platform_data {
 	struct kgsl_device_iommu_data *iommu_data;
 	int iommu_count;
 	struct msm_dcvs_core_info *core_info;
-	unsigned int snapshot_address;
 };
 
 #endif
@@ -444,3 +439,4 @@ int kgsl_gem_obj_addr(int drm_fd, int handle, unsigned long *start,
 #endif
 #endif
 #endif 
+

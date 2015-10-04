@@ -177,11 +177,6 @@ static void ib_parse_set_bin_data(struct kgsl_device *device, unsigned int *pkt,
 	snapshot_frozen_objsize += ret;
 }
 
-/*
- * This opcode writes to GPU memory - if the buffer is written to, there is a
- * good chance that it would be valuable to capture in the snapshot, so mark all
- * buffers that are written to as frozen
- */
 
 static void ib_parse_mem_write(struct kgsl_device *device, unsigned int *pkt,
 	unsigned int ptbase)
@@ -191,12 +186,6 @@ static void ib_parse_mem_write(struct kgsl_device *device, unsigned int *pkt,
 	if (type3_pkt_size(pkt[0]) < 1)
 		return;
 
-	/*
-	 * The address is where the data in the rest of this packet is written
-	 * to, but since that might be an offset into the larger buffer we need
-	 * to get the whole thing. Pass a size of 0 kgsl_snapshot_get_object to
-	 * capture the entire buffer.
-	 */
 
 	ret = kgsl_snapshot_get_object(device, ptbase, pkt[1] & 0xFFFFFFFC, 0,
 		SNAPSHOT_GPU_OBJECT_GENERIC);
@@ -247,8 +236,8 @@ static void ib_parse_draw_indx(struct kgsl_device *device, unsigned int *pkt,
 		ret = kgsl_snapshot_get_object(device, ptbase,
 				sp_vs_pvt_mem_addr, 8192,
 				SNAPSHOT_GPU_OBJECT_GENERIC);
+
 		snapshot_frozen_objsize += ret;
-		sp_vs_pvt_mem_addr = 0;
 	}
 
 	if (sp_fs_pvt_mem_addr) {
@@ -256,7 +245,6 @@ static void ib_parse_draw_indx(struct kgsl_device *device, unsigned int *pkt,
 				sp_fs_pvt_mem_addr, 8192,
 				SNAPSHOT_GPU_OBJECT_GENERIC);
 		snapshot_frozen_objsize += ret;
-		sp_fs_pvt_mem_addr = 0;
 	}
 
 	
@@ -274,13 +262,7 @@ static void ib_parse_draw_indx(struct kgsl_device *device, unsigned int *pkt,
 				0, SNAPSHOT_GPU_OBJECT_GENERIC);
 			snapshot_frozen_objsize += ret;
 		}
-
-		vbo[i].base = 0;
-		vbo[i].stride = 0;
 	}
-
-	vfd_control_0 = 0;
-	vfd_index_max = 0;
 }
 
 
@@ -303,13 +285,6 @@ static void ib_parse_type3(struct kgsl_device *device, unsigned int *ptr,
 	}
 }
 
-/*
- * Parse type0 packets found in the stream.  Some of the registers that are
- * written are clues for GPU buffers that we need to freeze.  Register writes
- * are considred valid when a draw initator is called, so just cache the values
- * here and freeze them when a CP_DRAW_INDX is seen.  This protects against
- * needlessly caching buffers that won't be used during a draw call
- */
 
 static void ib_parse_type0(struct kgsl_device *device, unsigned int *ptr,
 	unsigned int ptbase)
@@ -369,28 +344,21 @@ static void ib_add_gpu_object(struct kgsl_device *device, unsigned int ptbase,
 		unsigned int gpuaddr, unsigned int dwords)
 {
 	int i, ret, rem = dwords;
-	unsigned int *src;
-
-
-	if (kgsl_snapshot_have_object(device, ptbase, gpuaddr, dwords << 2))
-		return;
-
-	src = (unsigned int *) adreno_convertaddr(device, ptbase, gpuaddr,
-		dwords << 2);
+	unsigned int *src = (unsigned int *) adreno_convertaddr(device, ptbase,
+		gpuaddr, dwords << 2);
 
 	if (src == NULL)
 		return;
 
-	for (i = 0; rem > 0; rem--, i++) {
+	for (i = 0; rem != 0; rem--, i++) {
 		int pktsize;
 
-
 		if (!pkt_is_type0(src[i]) && !pkt_is_type3(src[i]))
-			break;
+			continue;
 
 		pktsize = type3_pkt_size(src[i]);
 
-		if (!pktsize || (pktsize + 1) > rem)
+		if ((pktsize + 1) > rem)
 			break;
 
 		if (pkt_is_type3(src[i])) {
@@ -524,7 +492,16 @@ static int snapshot_rb(struct kgsl_device *device, void *snapshot,
 		*data = rbptr[index];
 
 
-		if (parse_ibs == 0 && index == ib_parse_start)
+		if (pkt_is_type3(rbptr[index])) {
+			unsigned int pktsize =
+				type3_pkt_size(rbptr[index]);
+			if (index +  pktsize > rptr)
+				rptr = (index + pktsize) %
+					rb->sizedwords;
+		}
+
+
+		if (index == ib_parse_start)
 			parse_ibs = 1;
 		else if (index == rptr || adreno_rb_ctxtswitch(&rbptr[index]))
 			parse_ibs = 0;

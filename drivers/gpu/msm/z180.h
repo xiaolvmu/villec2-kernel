@@ -21,8 +21,6 @@
 
 #define Z180_DEFAULT_PWRSCALE_POLICY  NULL
 
-#define Z180_IDLE_TIMEOUT (10 * 1000)
-
 struct z180_ringbuffer {
 	unsigned int prevctx;
 	struct kgsl_memdesc      cmdbufdesc;

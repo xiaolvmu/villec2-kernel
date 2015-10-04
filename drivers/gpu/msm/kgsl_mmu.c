@@ -553,7 +553,7 @@ void kgsl_mh_start(struct kgsl_device *device)
 	struct kgsl_mh *mh = &device->mh;
 	
 	kgsl_regwrite(device, MH_MMU_CONFIG, 0);
-	kgsl_idle(device);
+	kgsl_idle(device,  KGSL_TIMEOUT_DEFAULT);
 
 	
 	kgsl_regwrite(device, MH_MMU_MPU_BASE, mh->mpu_base);

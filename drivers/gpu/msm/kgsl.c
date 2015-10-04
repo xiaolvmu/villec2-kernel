@@ -531,7 +531,7 @@ static int kgsl_suspend_device(struct kgsl_device *device, pm_message_t state)
 			break;
 		case KGSL_STATE_ACTIVE:
 			
-			device->ftbl->idle(device);
+			device->ftbl->idle(device, KGSL_TIMEOUT_DEFAULT);
 		case KGSL_STATE_NAP:
 		case KGSL_STATE_SLEEP:
 			
@@ -877,9 +877,6 @@ kgsl_sharedmem_find_region(struct kgsl_process_private *private,
 	unsigned int gpuaddr, size_t size)
 {
 	struct rb_node *node = private->mem_rb.rb_node;
-
-	if (!kgsl_mmu_gpuaddr_in_range(gpuaddr))
-		return NULL;
 
 	while (node != NULL) {
 		struct kgsl_mem_entry *entry;
@@ -1481,36 +1478,42 @@ static int kgsl_setup_phys_file(struct kgsl_mem_entry *entry,
 	if (ret)
 		return ret;
 
-	ret = -ERANGE;
-
-	if (phys == 0)
-		goto err;
-
-	if ((len & ~PAGE_MASK) ||
-		(offset & ~PAGE_MASK) ||
-		(size & ~PAGE_MASK)) {
-		KGSL_CORE_ERR("length offset or size is not page aligned\n");
+	if (phys == 0) {
+		ret = -EINVAL;
 		goto err;
 	}
 
-	
-	if (offset >= len || size > len)
+	if (offset >= len) {
+		ret = -EINVAL;
 		goto err;
+	}
 
 	if (size == 0)
-		size = len - offset;
+		size = len;
 
-	else if (_check_region(offset, size, len))
+	
+	size += offset & ~PAGE_MASK;
+
+	size = ALIGN(size, PAGE_SIZE);
+
+	if (_check_region(offset & PAGE_MASK, size, len)) {
+		KGSL_CORE_ERR("Offset (%ld) + size (%d) is larger"
+			      "than pmem region length %ld\n",
+			      offset & PAGE_MASK, size, len);
+		ret = -EINVAL;
 		goto err;
+
+	}
 
 	entry->priv_data = filep;
 
 	entry->memdesc.pagetable = pagetable;
 	entry->memdesc.size = size;
-	entry->memdesc.physaddr = phys + offset;
-	entry->memdesc.hostptr = (void *) (virt + offset);
+	entry->memdesc.physaddr = phys + (offset & PAGE_MASK);
+	entry->memdesc.hostptr = (void *) (virt + (offset & PAGE_MASK));
 
-	ret = memdesc_sg_phys(&entry->memdesc, phys + offset, size);
+	ret = memdesc_sg_phys(&entry->memdesc,
+		phys + (offset & PAGE_MASK), size);
 	if (ret)
 		goto err;
 
