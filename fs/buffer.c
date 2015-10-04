@@ -723,10 +723,6 @@ init_page_buffers(struct page *page, struct block_device *bdev,
 		bh = bh->b_this_page;
 	} while (bh != head);
 
-	/*
-	 * Caller needs to validate requested block against end of device.
-	 */
-	return end_block;
 	return end_block;
 }
 

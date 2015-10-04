@@ -143,12 +143,11 @@ static int get_matching_microcode(int cpu, const u8 *ucode_ptr,
 				  unsigned int *current_size)
 {
 	struct microcode_header_amd *mc_hdr;
-	unsigned int actual_size, patch_size;
+	unsigned int actual_size;
 	u16 equiv_cpu_id;
 
 	/* size of the current patch we're staring at */
-	patch_size = *(u32 *)(ucode_ptr + 4);
-	*current_size = patch_size + SECTION_HDR_SIZE;
+	*current_size = *(u32 *)(ucode_ptr + 4) + SECTION_HDR_SIZE;
 
 	equiv_cpu_id = find_equiv_id();
 	if (!equiv_cpu_id)
@@ -175,7 +174,7 @@ static int get_matching_microcode(int cpu, const u8 *ucode_ptr,
 	/*
 	 * now that the header looks sane, verify its size
 	 */
-	actual_size = verify_ucode_size(cpu, patch_size, leftover_size);
+	actual_size = verify_ucode_size(cpu, *current_size, leftover_size);
 	if (!actual_size)
 		return 0;
 
