@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -66,7 +66,7 @@ struct vcd_frame_data {
 	u32 alloc_len;
 	u32 data_len;
 	u32 offset;
-	s64 time_stamp; /* in usecs*/
+	s64 time_stamp; 
 	u32 flags;
 	u32 frm_clnt_data;
 	struct vcd_property_dec_output_buffer dec_op_prop;
@@ -78,9 +78,6 @@ struct vcd_frame_data {
 	u32 desc_size;
 	struct ion_handle *buff_ion_handle;
 	struct vcd_aspect_ratio aspect_ratio_info;
-	u32 metadata_len;
-	u32 metadata_offset;
-	u32 curr_ltr_id;
 };
 
 struct vcd_sequence_hdr {
@@ -103,7 +100,6 @@ struct vcd_buffer_requirement {
 	size_t sz;
 	u32 align;
 	u32 buf_pool_id;
-	size_t meta_buffer_size;
 };
 
 struct vcd_init_config {
@@ -120,7 +116,6 @@ struct vcd_init_config {
 	void (*timer_stop) (void *timer_handle);
 };
 
-/*Flags passed to vcd_open*/
 #define VCD_CP_SESSION 0x00000001
 
 u32 vcd_init(struct vcd_init_config *config, s32 *driver_handle);

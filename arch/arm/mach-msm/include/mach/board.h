@@ -263,11 +263,7 @@ enum sensor_flip_mirror_info {
 	CAMERA_SENSOR_FLIP,
 	CAMERA_SENSOR_MIRROR_FLIP,
 };
-enum sensor_mount_angle {
-	ANGLE_90,
-	ANGLE_180,
-	ANGLE_270,
-};
+
 struct msm_camera_sensor_platform_info {
 	int mount_angle;
 	int sensor_reset_enable;
@@ -278,6 +274,7 @@ struct msm_camera_sensor_platform_info {
 	int privacy_light;
 	enum sensor_flip_mirror_info mirror_flip;
 	void *privacy_light_info;
+<<<<<<< HEAD
 #ifdef CONFIG_MSM_CAMERA_V4L2
 	struct camera_vreg_t *cam_vreg;
 	int num_vreg;
@@ -299,6 +296,9 @@ struct msm_camera_gpio_conf {
 	struct msm_gpio_set_tbl *cam_gpio_set_tbl;
 	uint8_t cam_gpio_set_tbl_size;
 #endif
+=======
+	
+>>>>>>> parent of e8e66fb... ION From M7
 };
 
 #ifdef CONFIG_MSM_CAMERA_V4L2
@@ -623,7 +623,6 @@ struct msm_vidc_platform_data {
 	int disable_fullhd;
 	u32 cp_enabled;
 	u32 secure_wb_heap;
-	u32 enable_sec_metadata;
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *vidc_bus_client_pdata;
 #endif
