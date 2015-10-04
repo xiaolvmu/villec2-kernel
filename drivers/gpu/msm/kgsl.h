@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,8 +23,6 @@
 #include <linux/regulator/consumer.h>
 #include <linux/mm.h>
 #include <linux/ion.h>
-
-#include <mach/kgsl.h>
 
 #define KGSL_NAME "kgsl"
 
@@ -61,7 +59,6 @@
 	do { _stat += (_size); if (_stat > _max) _max = _stat; } while (0)
 
 struct kgsl_device;
-struct kgsl_context;
 
 struct kgsl_driver {
 	struct cdev cdev;
@@ -82,8 +79,6 @@ struct kgsl_driver {
 	spinlock_t ptlock;
 	
 	struct mutex process_mutex;
-	
-	spinlock_t process_dump_lock;
 
 	
 	struct mutex devlock;
@@ -121,7 +116,6 @@ struct kgsl_memdesc_ops {
 };
 
 #define KGSL_MEMDESC_GUARD_PAGE BIT(0)
-#define KGSL_MEMDESC_GLOBAL BIT(1)
 
 struct kgsl_memdesc {
 	struct kgsl_pagetable *pagetable;
@@ -129,36 +123,34 @@ struct kgsl_memdesc {
 	unsigned int gpuaddr;
 	unsigned int physaddr;
 	unsigned int size;
-	unsigned int priv; 
+	unsigned int priv;
 	struct scatterlist *sg;
-	unsigned int sglen; 
-	unsigned int sglen_alloc;  
+	unsigned int sglen;
 	struct kgsl_memdesc_ops *ops;
-	unsigned int flags; 
+	int flags;
 	struct ion_handle* handle;
 	struct kgsl_process_private *private;
 };
 
-
 #if 0
-#define KGSL_MEM_ENTRY_KERNEL      0
-#define KGSL_MEM_ENTRY_PMEM        1
-#define KGSL_MEM_ENTRY_ASHMEM      2
-#define KGSL_MEM_ENTRY_USER        3
-#define KGSL_MEM_ENTRY_ION     4
-#define KGSL_MEM_ENTRY_PAGE_ALLOC  5
-#define KGSL_MEM_ENTRY_PRE_ALLOC   6
-#define KGSL_MEM_ENTRY_MAX     7
+#define KGSL_MEM_ENTRY_KERNEL		0
+#define KGSL_MEM_ENTRY_PMEM		1
+#define KGSL_MEM_ENTRY_ASHMEM		2
+#define KGSL_MEM_ENTRY_USER		3
+#define KGSL_MEM_ENTRY_ION		4
+#define KGSL_MEM_ENTRY_PAGE_ALLOC	5
+#define KGSL_MEM_ENTRY_PRE_ALLOC	6
+#define KGSL_MEM_ENTRY_MAX		7
 #else
 enum {
-KGSL_MEM_ENTRY_KERNEL = 0,
-KGSL_MEM_ENTRY_PMEM,
-KGSL_MEM_ENTRY_ASHMEM,
-KGSL_MEM_ENTRY_USER,
-KGSL_MEM_ENTRY_ION,
-KGSL_MEM_ENTRY_PAGE_ALLOC,
-KGSL_MEM_ENTRY_PRE_ALLOC,
-KGSL_MEM_ENTRY_MAX,
+	KGSL_MEM_ENTRY_KERNEL = 0,
+	KGSL_MEM_ENTRY_PMEM,
+	KGSL_MEM_ENTRY_ASHMEM,
+	KGSL_MEM_ENTRY_USER,
+	KGSL_MEM_ENTRY_ION,
+	KGSL_MEM_ENTRY_PAGE_ALLOC,
+	KGSL_MEM_ENTRY_PRE_ALLOC,
+	KGSL_MEM_ENTRY_MAX,
 };
 #endif
 
@@ -183,16 +175,13 @@ struct kgsl_mem_entry {
 #endif
 
 void kgsl_mem_entry_destroy(struct kref *kref);
-int kgsl_postmortem_dump(struct kgsl_device *device, int manual);
 
-struct kgsl_mem_entry *kgsl_get_mem_entry(struct kgsl_device *device,
-		unsigned int ptbase, unsigned int gpuaddr, unsigned int size);
+struct kgsl_mem_entry *kgsl_get_mem_entry(unsigned int ptbase,
+		unsigned int gpuaddr, unsigned int size);
 
 struct kgsl_mem_entry *kgsl_sharedmem_find_region(
 	struct kgsl_process_private *private, unsigned int gpuaddr,
 	size_t size);
-
-void kgsl_get_memory_usage(char *str, size_t len, unsigned int memflags);
 
 int kgsl_add_event(struct kgsl_device *device, u32 id, u32 ts,
 	void (*cb)(struct kgsl_device *, void *, u32, u32), void *priv,
@@ -200,9 +189,6 @@ int kgsl_add_event(struct kgsl_device *device, u32 id, u32 ts,
 
 void kgsl_cancel_events(struct kgsl_device *device,
 	void *owner);
-
-void kgsl_cancel_events_ctxt(struct kgsl_device *device,
-	struct kgsl_context *context);
 
 extern const struct dev_pm_ops kgsl_pm_ops;
 

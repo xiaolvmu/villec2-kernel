@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,32 +13,26 @@
 #ifndef __ADRENO_DRAWCTXT_H
 #define __ADRENO_DRAWCTXT_H
 
-#include <linux/sched.h>
-
 #include "adreno_pm4types.h"
 #include "a2xx_reg.h"
 
 
 #define CTXT_FLAGS_NOT_IN_USE		0x00000000
-#define CTXT_FLAGS_IN_USE		BIT(0)
+#define CTXT_FLAGS_IN_USE		0x00000001
 
-#define CTXT_FLAGS_STATE_SHADOW		BIT(1)
+#define CTXT_FLAGS_STATE_SHADOW		0x00000010
 
-#define CTXT_FLAGS_GMEM_SHADOW		BIT(2)
-#define CTXT_FLAGS_GMEM_SAVE		BIT(3)
-#define CTXT_FLAGS_GMEM_RESTORE		BIT(4)
-#define CTXT_FLAGS_PREAMBLE		BIT(5)
-#define CTXT_FLAGS_SHADER_SAVE		BIT(6)
-#define CTXT_FLAGS_SHADER_RESTORE	BIT(7)
-#define CTXT_FLAGS_GPU_HANG		BIT(8)
-#define CTXT_FLAGS_NOGMEMALLOC          BIT(9)
-#define CTXT_FLAGS_TRASHSTATE		BIT(10)
-#define CTXT_FLAGS_PER_CONTEXT_TS	BIT(11)
-#define CTXT_FLAGS_GPU_HANG_FT	BIT(12)
-#define CTXT_FLAGS_BEING_DESTROYED	BIT(13)
-#define CTXT_FLAGS_USER_GENERATED_TS    BIT(14)
-#define CTXT_FLAGS_SKIP_EOF             BIT(15)
-#define CTXT_FLAGS_NO_FAULT_TOLERANCE  BIT(16)
+#define CTXT_FLAGS_GMEM_SHADOW		0x00000100
+#define CTXT_FLAGS_GMEM_SAVE		0x00000200
+#define CTXT_FLAGS_GMEM_RESTORE		0x00000400
+#define CTXT_FLAGS_PREAMBLE		0x00000800
+#define CTXT_FLAGS_SHADER_SAVE		0x00002000
+#define CTXT_FLAGS_SHADER_RESTORE	0x00004000
+#define CTXT_FLAGS_GPU_HANG		0x00008000
+#define CTXT_FLAGS_NOGMEMALLOC          0x00010000
+#define CTXT_FLAGS_TRASHSTATE		0x00020000
+#define CTXT_FLAGS_PER_CONTEXT_TS	0x00040000
+#define CTXT_FLAGS_GPU_HANG_RECOVERED	0x00008000
 
 struct kgsl_device;
 struct adreno_device;
@@ -65,10 +59,7 @@ struct gmem_shadow_t {
 };
 
 struct adreno_context {
-	pid_t pid;
-	char pid_name[TASK_COMM_LEN];
 	unsigned int id;
-	unsigned int ib_gpu_time_used;
 	uint32_t flags;
 	struct kgsl_pagetable *pagetable;
 	struct kgsl_memdesc gpustate;

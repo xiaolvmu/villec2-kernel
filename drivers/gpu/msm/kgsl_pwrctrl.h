@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,17 +24,15 @@
 
 struct platform_device;
 
-struct kgsl_clk_stats {
-	unsigned int old_clock_time[KGSL_MAX_PWRLEVELS];
-	unsigned int clock_time[KGSL_MAX_PWRLEVELS];
-	unsigned int on_time_old;
-	ktime_t start;
-	ktime_t stop;
+struct kgsl_busy {
+	struct timeval start;
+	struct timeval stop;
+	int on_time;
+	int time;
+	int on_time_old;
+	int time_old;
 	unsigned int no_nap_cnt;
-	unsigned int elapsed;
-	unsigned int elapsed_old;
 };
-
 
 struct kgsl_pwrctrl {
 	int interrupt_num;
@@ -45,20 +43,18 @@ struct kgsl_pwrctrl {
 	unsigned int active_pwrlevel;
 	int thermal_pwrlevel;
 	unsigned int default_pwrlevel;
-	unsigned int max_pwrlevel;
-	unsigned int min_pwrlevel;
 	unsigned int num_pwrlevels;
 	unsigned int interval_timeout;
 	bool strtstp_sleepwake;
 	struct regulator *gpu_reg;
-	struct regulator *gpu_cx;
+	struct regulator *gpu_dig;
 	uint32_t pcl;
 	unsigned int nap_allowed;
 	unsigned int idle_needed;
 	const char *irq_name;
 	s64 time;
+	struct kgsl_busy busy;
 	unsigned int restore_slumber;
-	struct kgsl_clk_stats clk_stats;
 };
 
 void kgsl_pwrctrl_irq(struct kgsl_device *device, int state);
