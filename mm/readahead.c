@@ -18,6 +18,7 @@
 #include <linux/pagevec.h>
 #include <linux/pagemap.h>
 
+#include <trace/events/mmcio.h>
 void
 file_ra_state_init(struct file_ra_state *ra, struct address_space *mapping)
 {
@@ -155,8 +156,10 @@ __do_page_cache_readahead(struct address_space *mapping, struct file *filp,
 		ret++;
 	}
 
-	if (ret)
+	if (ret) {
+		trace_readahead(filp, ret);
 		read_pages(mapping, filp, &page_pool, ret);
+	}
 	BUG_ON(!list_empty(&page_pool));
 out:
 	return ret;

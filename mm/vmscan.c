@@ -1436,10 +1436,10 @@ static void get_scan_count(struct mem_cgroup_zone *mz, struct scan_control *sc,
 		reclaim_stat->recent_rotated[1] /= 2;
 	}
 
-	ap = (anon_prio + 1) * (reclaim_stat->recent_scanned[0] + 1);
+	ap = anon_prio * (reclaim_stat->recent_scanned[0] + 1);
 	ap /= reclaim_stat->recent_rotated[0] + 1;
 
-	fp = (file_prio + 1) * (reclaim_stat->recent_scanned[1] + 1);
+	fp = file_prio * (reclaim_stat->recent_scanned[1] + 1);
 	fp /= reclaim_stat->recent_rotated[1] + 1;
 	spin_unlock_irq(&mz->zone->lru_lock);
 
@@ -1452,7 +1452,7 @@ out:
 		unsigned long scan;
 
 		scan = zone_nr_lru_pages(mz, lru);
-		if (priority || noswap) {
+		if (priority || noswap || !vmscan_swappiness(mz, sc)) {
 			scan >>= priority;
 			if (!scan && force_scan)
 				scan = SWAP_CLUSTER_MAX;
@@ -2331,7 +2331,11 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 }
 #endif 
 
-static int __devinit cpu_callback(struct notifier_block *nfb,
+/* It's optimal to keep kswapds on the same CPUs as their memory, but
+   not required for correctness.  So if the last cpu in a node goes
+   away, we get changed to run anywhere: as the first one comes back,
+   restore their cpu bindings. */
+static int cpu_callback(struct notifier_block *nfb,
 				  unsigned long action, void *hcpu)
 {
 	int nid;
