@@ -254,6 +254,8 @@ static void nfsd_shutdown(void)
 
 static void nfsd_last_thread(struct svc_serv *serv, struct net *net)
 {
+	/* When last nfsd thread exits we need to do some clean-up */
+	nfsd_serv = NULL;
 	nfsd_shutdown();
 
 	svc_rpcb_cleanup(serv, net);
@@ -330,7 +332,6 @@ static int nfsd_get_default_max_blksize(void)
 int nfsd_create_serv(void)
 {
 	int error;
-	struct net *net = current->nsproxy->net_ns;
 
 	WARN_ON(!mutex_is_locked(&nfsd_mutex));
 	if (nfsd_serv) {
@@ -345,7 +346,7 @@ int nfsd_create_serv(void)
 	if (nfsd_serv == NULL)
 		return -ENOMEM;
 
-	error = svc_bind(nfsd_serv, net);
+	error = svc_bind(nfsd_serv, current->nsproxy->net_ns);
 	if (error < 0) {
 		svc_destroy(nfsd_serv);
 		return error;
@@ -426,7 +427,11 @@ int nfsd_set_nrthreads(int n, int *nthreads)
 		if (err)
 			break;
 	}
-	nfsd_destroy(net);
+
+	if (nfsd_serv->sv_nrthreads == 1)
+		svc_shutdown_net(nfsd_serv, net);
+	svc_destroy(nfsd_serv);
+
 	return err;
 }
 
@@ -473,7 +478,9 @@ out_shutdown:
 	if (error < 0 && !nfsd_up_before)
 		nfsd_shutdown();
 out_destroy:
-	nfsd_destroy(net);		/* Release server */
+	if (nfsd_serv->sv_nrthreads == 1)
+		svc_shutdown_net(nfsd_serv, net);
+	svc_destroy(nfsd_serv);		/* Release server */
 out:
 	mutex_unlock(&nfsd_mutex);
 	return error;
@@ -556,12 +563,11 @@ nfsd(void *vrqstp)
 	nfsdstats.th_cnt --;
 
 out:
-	rqstp->rq_server = NULL;
+	if (rqstp->rq_server->sv_nrthreads == 1)
+		svc_shutdown_net(rqstp->rq_server, &init_net);
 
 	/* Release the thread */
 	svc_exit_thread(rqstp);
-
-	nfsd_destroy(&init_net);
 
 	/* Release module */
 	mutex_unlock(&nfsd_mutex);
@@ -676,7 +682,9 @@ int nfsd_pool_stats_release(struct inode *inode, struct file *file)
 
 	mutex_lock(&nfsd_mutex);
 	/* this function really, really should have been called svc_put() */
-	nfsd_destroy(net);
+	if (nfsd_serv->sv_nrthreads == 1)
+		svc_shutdown_net(nfsd_serv, net);
+	svc_destroy(nfsd_serv);
 	mutex_unlock(&nfsd_mutex);
 	return ret;
 }

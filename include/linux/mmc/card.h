@@ -274,7 +274,6 @@ struct mmc_card {
 #define MMC_QUIRK_BLK_NO_CMD23	(1<<7)		
 #define MMC_QUIRK_BROKEN_BYTE_MODE_512 (1<<8)	
 #define MMC_QUIRK_LONG_READ_TIME (1<<9)		
-#define MMC_QUIRK_SEC_ERASE_TRIM_BROKEN (1<<10)	/* Skip secure for erase/trim */
 						
 #define MMC_QUIRK_INAND_DATA_TIMEOUT  (1<<8)    
 	unsigned int    	poweroff_notify_state;	
