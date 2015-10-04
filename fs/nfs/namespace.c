@@ -31,7 +31,28 @@ static struct vfsmount *nfs_do_submount(struct dentry *dentry,
 					struct nfs_fattr *fattr,
 					rpc_authflavor_t authflavor);
 
-char *nfs_path(char **p, struct dentry *dentry, char *buffer, ssize_t buflen)
+/*
+ * nfs_path - reconstruct the path given an arbitrary dentry
+ * @base - used to return pointer to the end of devname part of path
+ * @dentry - pointer to dentry
+ * @buffer - result buffer
+ * @buflen - length of buffer
+ * @flags - options (see below)
+ *
+ * Helper function for constructing the server pathname
+ * by arbitrary hashed dentry.
+ *
+ * This is mainly for use in figuring out the path on the
+ * server side when automounting on top of an existing partition
+ * and in generating /proc/mounts and friends.
+ *
+ * Supported flags:
+ * NFS_PATH_CANONICAL: ensure there is exactly one slash after
+ *		       the original device (export) name
+ *		       (if unset, the original name is returned verbatim)
+ */
+char *nfs_path(char **p, struct dentry *dentry, char *buffer, ssize_t buflen,
+	       unsigned flags)
 {
 	char *end;
 	int namelen;
@@ -64,7 +85,7 @@ rename_retry:
 		rcu_read_unlock();
 		goto rename_retry;
 	}
-	if (*end != '/') {
+	if ((flags & NFS_PATH_CANONICAL) && *end != '/') {
 		if (--buflen < 0) {
 			spin_unlock(&dentry->d_lock);
 			rcu_read_unlock();
@@ -81,9 +102,11 @@ rename_retry:
 		return end;
 	}
 	namelen = strlen(base);
-	
-	while (namelen > 0 && base[namelen - 1] == '/')
-		namelen--;
+	if (flags & NFS_PATH_CANONICAL) {
+		/* Strip off excess slashes in base string */
+		while (namelen > 0 && base[namelen - 1] == '/')
+			namelen--;
+	}
 	buflen -= namelen;
 	if (buflen < 0) {
 		spin_unlock(&dentry->d_lock);
@@ -149,7 +172,7 @@ static struct rpc_clnt *nfs_lookup_mountpoint(struct inode *dir,
 		return ERR_PTR(err);
 	return rpc_clone_client(NFS_SERVER(dir)->client);
 }
-#else 
+#else /* CONFIG_NFS_V4 */
 static inline struct rpc_clnt *nfs_lookup_mountpoint(struct inode *dir,
 						     struct qstr *name,
 						     struct nfs_fh *fh,
@@ -160,8 +183,20 @@ static inline struct rpc_clnt *nfs_lookup_mountpoint(struct inode *dir,
 		return ERR_PTR(err);
 	return rpc_clone_client(NFS_SERVER(dir)->client);
 }
-#endif 
+#endif /* CONFIG_NFS_V4 */
 
+/*
+ * nfs_d_automount - Handle crossing a mountpoint on the server
+ * @path - The mountpoint
+ *
+ * When we encounter a mountpoint on the server, we want to set up
+ * a mountpoint on the client too, to prevent inode numbers from
+ * colliding, and to allow "df" to work properly.
+ * On NFSv4, we also want to allow for the fact that different
+ * filesystems may be migrated to different servers in a failover
+ * situation, and that different filesystems may want to use
+ * different security flavours.
+ */
 struct vfsmount *nfs_d_automount(struct path *path)
 {
 	struct vfsmount *mnt;
@@ -184,7 +219,7 @@ struct vfsmount *nfs_d_automount(struct path *path)
 
 	dprintk("%s: enter\n", __func__);
 
-	
+	/* Look it up again to get its attributes */
 	parent = dget_parent(path->dentry);
 	client = nfs_lookup_mountpoint(parent->d_inode, &path->dentry->d_name, fh, fattr);
 	dput(parent);
@@ -203,7 +238,7 @@ struct vfsmount *nfs_d_automount(struct path *path)
 		goto out;
 
 	dprintk("%s: done, success\n", __func__);
-	mntget(mnt); 
+	mntget(mnt); /* prevent immediate expiration */
 	mnt_set_expiry(mnt, &nfs_automount_list);
 	schedule_delayed_work(&nfs_automount_task, nfs_mountpoint_expiry_timeout);
 
@@ -218,11 +253,31 @@ out_nofree:
 	return mnt;
 }
 
+static int
+nfs_namespace_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
+{
+	if (NFS_FH(dentry->d_inode)->size != 0)
+		return nfs_getattr(mnt, dentry, stat);
+	generic_fillattr(dentry->d_inode, stat);
+	return 0;
+}
+
+static int
+nfs_namespace_setattr(struct dentry *dentry, struct iattr *attr)
+{
+	if (NFS_FH(dentry->d_inode)->size != 0)
+		return nfs_setattr(dentry, attr);
+	return -EACCES;
+}
+
 const struct inode_operations nfs_mountpoint_inode_operations = {
 	.getattr	= nfs_getattr,
+	.setattr	= nfs_setattr,
 };
 
 const struct inode_operations nfs_referral_inode_operations = {
+	.getattr	= nfs_namespace_getattr,
+	.setattr	= nfs_namespace_setattr,
 };
 
 static void nfs_expire_automounts(struct work_struct *work)
@@ -240,6 +295,9 @@ void nfs_release_automount_timer(void)
 		cancel_delayed_work(&nfs_automount_task);
 }
 
+/*
+ * Clone a mountpoint of the appropriate type
+ */
 static struct vfsmount *nfs_do_clone_mount(struct nfs_server *server,
 					   const char *devname,
 					   struct nfs_clone_mount *mountdata)
@@ -260,6 +318,14 @@ static struct vfsmount *nfs_do_clone_mount(struct nfs_server *server,
 #endif
 }
 
+/**
+ * nfs_do_submount - set up mountpoint when crossing a filesystem boundary
+ * @dentry - parent directory
+ * @fh - filehandle for new root dentry
+ * @fattr - attributes for new root inode
+ * @authflavor - security flavor to use when performing the mount
+ *
+ */
 static struct vfsmount *nfs_do_submount(struct dentry *dentry,
 					struct nfs_fh *fh,
 					struct nfs_fattr *fattr,

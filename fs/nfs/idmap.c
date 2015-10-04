@@ -52,6 +52,7 @@
 
 #define NFS_UINT_MAXLEN 11
 
+/* Default cache timeout is 10 minutes */
 unsigned int nfs_idmap_cache_timeout = 600;
 static const struct cred *id_resolver_cache;
 static struct key_type key_type_id_resolver_legacy;
@@ -62,6 +63,18 @@ struct idmap {
 	struct mutex		idmap_mutex;
 };
 
+struct idmap_legacy_upcalldata {
+	struct rpc_pipe_msg pipe_msg;
+	struct idmap_msg idmap_msg;
+	struct idmap *idmap;
+};
+
+/**
+ * nfs_fattr_init_names - initialise the nfs_fattr owner_name/group_name fields
+ * @fattr: fully initialised struct nfs_fattr
+ * @owner_name: owner name string cache
+ * @group_name: group name string cache
+ */
 void nfs_fattr_init_names(struct nfs_fattr *fattr,
 		struct nfs4_string *owner_name,
 		struct nfs4_string *group_name)
@@ -110,6 +123,10 @@ static bool nfs_fattr_map_group_name(struct nfs_server *server, struct nfs_fattr
 	return true;
 }
 
+/**
+ * nfs_fattr_free_names - free up the NFSv4 owner and group strings
+ * @fattr: a fully initialised nfs_fattr structure
+ */
 void nfs_fattr_free_names(struct nfs_fattr *fattr)
 {
 	if (fattr->valid & NFS_ATTR_FATTR_OWNER_NAME)
@@ -118,6 +135,14 @@ void nfs_fattr_free_names(struct nfs_fattr *fattr)
 		nfs_fattr_free_group_name(fattr);
 }
 
+/**
+ * nfs_fattr_map_and_free_names - map owner/group strings into uid/gid and free
+ * @server: pointer to the filesystem nfs_server structure
+ * @fattr: a fully initialised nfs_fattr structure
+ *
+ * This helper maps the cached NFSv4 owner/group strings in fattr into
+ * their numeric uid/gid equivalents, and then frees the cached strings.
+ */
 void nfs_fattr_map_and_free_names(struct nfs_server *server, struct nfs_fattr *fattr)
 {
 	if (nfs_fattr_map_owner_name(server, fattr))
@@ -213,6 +238,13 @@ static void nfs_idmap_quit_keyring(void)
 	put_cred(id_resolver_cache);
 }
 
+/*
+ * Assemble the description to pass to request_key()
+ * This function will allocate a new string and update dest to point
+ * at it.  The caller is responsible for freeing dest.
+ *
+ * On error 0 is returned.  Otherwise, the length of dest is returned.
+ */
 static ssize_t nfs_idmap_get_desc(const char *name, size_t namelen,
 				const char *type, size_t typelen, char **desc)
 {
@@ -300,11 +332,13 @@ static ssize_t nfs_idmap_get_key(const char *name, size_t namelen,
 		ret = nfs_idmap_request_key(&key_type_id_resolver_legacy,
 					    name, namelen, type, data,
 					    data_size, idmap);
+		idmap->idmap_key_cons = NULL;
 		mutex_unlock(&idmap->idmap_mutex);
 	}
 	return ret;
 }
 
+/* ID -> Name */
 static ssize_t nfs_idmap_lookup_name(__u32 id, const char *type, char *buf,
 				     size_t buflen, struct idmap *idmap)
 {
@@ -319,6 +353,7 @@ static ssize_t nfs_idmap_lookup_name(__u32 id, const char *type, char *buf,
 	return ret;
 }
 
+/* Name -> ID */
 static int nfs_idmap_lookup_id(const char *name, size_t namelen, const char *type,
 			       __u32 *id, struct idmap *idmap)
 {
@@ -337,6 +372,7 @@ static int nfs_idmap_lookup_id(const char *name, size_t namelen, const char *typ
 	return ret;
 }
 
+/* idmap classic begins here */
 module_param(nfs_idmap_cache_timeout, int, 0644);
 
 enum {
@@ -354,11 +390,13 @@ static const match_table_t nfs_idmap_tokens = {
 static int nfs_idmap_legacy_upcall(struct key_construction *, const char *, void *);
 static ssize_t idmap_pipe_downcall(struct file *, const char __user *,
 				   size_t);
+static void idmap_release_pipe(struct inode *);
 static void idmap_pipe_destroy_msg(struct rpc_pipe_msg *);
 
 static const struct rpc_pipe_ops idmap_upcall_ops = {
 	.upcall		= rpc_pipe_generic_upcall,
 	.downcall	= idmap_pipe_downcall,
+	.release_pipe	= idmap_release_pipe,
 	.destroy_msg	= idmap_pipe_destroy_msg,
 };
 
@@ -486,6 +524,13 @@ static int __rpc_pipefs_event(struct nfs_client *clp, unsigned long event,
 
 			parent = clp->cl_idmap->idmap_pipe->dentry->d_parent;
 			__nfs_idmap_unregister(clp->cl_idmap->idmap_pipe);
+			/*
+			 * Note: This is a dirty hack. SUNRPC hook has been
+			 * called already but simple_rmdir() call for the
+			 * directory returned with error because of idmap pipe
+			 * inside. Thus now we have to remove this directory
+			 * here.
+			 */
 			if (rpc_rmdir(parent))
 				printk(KERN_ERR "NFS: %s: failed to remove "
 					"clnt dir!\n", __func__);
@@ -567,7 +612,8 @@ void nfs_idmap_quit(void)
 	nfs_idmap_quit_keyring();
 }
 
-static int nfs_idmap_prepare_message(char *desc, struct idmap_msg *im,
+static int nfs_idmap_prepare_message(char *desc, struct idmap *idmap,
+				     struct idmap_msg *im,
 				     struct rpc_pipe_msg *msg)
 {
 	substring_t substr;
@@ -610,22 +656,23 @@ static int nfs_idmap_legacy_upcall(struct key_construction *cons,
 				   const char *op,
 				   void *aux)
 {
+	struct idmap_legacy_upcalldata *data;
 	struct rpc_pipe_msg *msg;
 	struct idmap_msg *im;
 	struct idmap *idmap = (struct idmap *)aux;
 	struct key *key = cons->key;
 	int ret = -ENOMEM;
 
-	
-	msg = kmalloc(sizeof(*msg), GFP_KERNEL);
-	if (!msg)
-		goto out0;
-
-	im = kmalloc(sizeof(*im), GFP_KERNEL);
-	if (!im)
+	/* msg and im are freed in idmap_pipe_destroy_msg */
+	data = kmalloc(sizeof(*data), GFP_KERNEL);
+	if (!data)
 		goto out1;
 
-	ret = nfs_idmap_prepare_message(key->description, im, msg);
+	msg = &data->pipe_msg;
+	im = &data->idmap_msg;
+	data->idmap = idmap;
+
+	ret = nfs_idmap_prepare_message(key->description, idmap, im, msg);
 	if (ret < 0)
 		goto out2;
 
@@ -634,15 +681,15 @@ static int nfs_idmap_legacy_upcall(struct key_construction *cons,
 
 	ret = rpc_queue_upcall(idmap->idmap_pipe, msg);
 	if (ret < 0)
-		goto out2;
+		goto out3;
 
 	return ret;
 
+out3:
+	idmap->idmap_key_cons = NULL;
 out2:
-	kfree(im);
+	kfree(data);
 out1:
-	kfree(msg);
-out0:
 	complete_request_key(cons, ret);
 	return ret;
 }
@@ -682,6 +729,10 @@ idmap_pipe_downcall(struct file *filp, const char __user *src, size_t mlen)
 	size_t namelen_in;
 	int ret;
 
+	/* If instantiation is successful, anyone waiting for key construction
+	 * will have been woken up and someone else may now have used
+	 * idmap_key_cons - so after this point we may no longer touch it.
+	 */
 	cons = ACCESS_ONCE(idmap->idmap_key_cons);
 	idmap->idmap_key_cons = NULL;
 
@@ -696,9 +747,8 @@ idmap_pipe_downcall(struct file *filp, const char __user *src, size_t mlen)
 	}
 
 	if (!(im.im_status & IDMAP_STATUS_SUCCESS)) {
-		ret = mlen;
-		complete_request_key(cons, -ENOKEY);
-		goto out_incomplete;
+		ret = -ENOKEY;
+		goto out;
 	}
 
 	namelen_in = strnlen(im.im_name, IDMAP_NAMESZ);
@@ -715,16 +765,32 @@ idmap_pipe_downcall(struct file *filp, const char __user *src, size_t mlen)
 
 out:
 	complete_request_key(cons, ret);
-out_incomplete:
 	return ret;
 }
 
 static void
 idmap_pipe_destroy_msg(struct rpc_pipe_msg *msg)
 {
-	
-	kfree(msg->data);
-	kfree(msg);
+	struct idmap_legacy_upcalldata *data = container_of(msg,
+			struct idmap_legacy_upcalldata,
+			pipe_msg);
+	struct idmap *idmap = data->idmap;
+	struct key_construction *cons;
+	if (msg->errno) {
+		cons = ACCESS_ONCE(idmap->idmap_key_cons);
+		idmap->idmap_key_cons = NULL;
+		complete_request_key(cons, msg->errno);
+	}
+	/* Free memory allocated in nfs_idmap_legacy_upcall() */
+	kfree(data);
+}
+
+static void
+idmap_release_pipe(struct inode *inode)
+{
+	struct rpc_inode *rpci = RPC_I(inode);
+	struct idmap *idmap = (struct idmap *)rpci->private;
+	idmap->idmap_key_cons = NULL;
 }
 
 int nfs_map_name_to_uid(const struct nfs_server *server, const char *name, size_t namelen, __u32 *uid)

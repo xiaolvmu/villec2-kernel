@@ -46,33 +46,9 @@
 
 #define NFSDBG_FACILITY		NFSDBG_PROC
 
-static int
-nfs_rpc_wrapper(struct rpc_clnt *clnt, struct rpc_message *msg, int flags)
-{
-	int res;
-	do {
-		res = rpc_call_sync(clnt, msg, flags);
-		if (res != -EKEYEXPIRED)
-			break;
-		freezable_schedule_timeout_killable(NFS_JUKEBOX_RETRY_TIME);
-		res = -ERESTARTSYS;
-	} while (!fatal_signal_pending(current));
-	return res;
-}
-
-#define rpc_call_sync(clnt, msg, flags)	nfs_rpc_wrapper(clnt, msg, flags)
-
-static int
-nfs_async_handle_expired_key(struct rpc_task *task)
-{
-	if (task->tk_status != -EKEYEXPIRED)
-		return 0;
-	task->tk_status = 0;
-	rpc_restart_call(task);
-	rpc_delay(task, NFS_JUKEBOX_RETRY_TIME);
-	return 1;
-}
-
+/*
+ * Bare-bones access to getattr: this is for nfs_read_super.
+ */
 static int
 nfs_proc_get_root(struct nfs_server *server, struct nfs_fh *fhandle,
 		  struct nfs_fsinfo *info)
@@ -89,7 +65,7 @@ nfs_proc_get_root(struct nfs_server *server, struct nfs_fh *fhandle,
 	dprintk("%s: call getattr\n", __func__);
 	nfs_fattr_init(fattr);
 	status = rpc_call_sync(server->client, &msg, 0);
-	
+	/* Retry with default authentication if different */
 	if (status && server->nfs_client->cl_rpcclient != server->client)
 		status = rpc_call_sync(server->nfs_client->cl_rpcclient, &msg, 0);
 	dprintk("%s: reply getattr: %d\n", __func__, status);
@@ -99,7 +75,7 @@ nfs_proc_get_root(struct nfs_server *server, struct nfs_fh *fhandle,
 	msg.rpc_proc = &nfs_procedures[NFSPROC_STATFS];
 	msg.rpc_resp = &fsinfo;
 	status = rpc_call_sync(server->client, &msg, 0);
-	
+	/* Retry with default authentication if different */
 	if (status && server->nfs_client->cl_rpcclient != server->client)
 		status = rpc_call_sync(server->nfs_client->cl_rpcclient, &msg, 0);
 	dprintk("%s: reply statfs: %d\n", __func__, status);
@@ -117,6 +93,9 @@ nfs_proc_get_root(struct nfs_server *server, struct nfs_fh *fhandle,
 	return 0;
 }
 
+/*
+ * One function for each procedure in the NFS protocol.
+ */
 static int
 nfs_proc_getattr(struct nfs_server *server, struct nfs_fh *fhandle,
 		struct nfs_fattr *fattr)
@@ -151,7 +130,7 @@ nfs_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 	};
 	int	status;
 
-	
+	/* Mask out the non-modebit related stuff from attr->ia_mode */
 	sattr->ia_mode &= S_IALLUGO;
 
 	dprintk("NFS call  setattr\n");
@@ -271,6 +250,9 @@ out:
 	return status;
 }
 
+/*
+ * In NFSv2, mknod is grafted onto the create call.
+ */
 static int
 nfs_proc_mknod(struct inode *dir, struct dentry *dentry, struct iattr *sattr,
 	       dev_t rdev)
@@ -290,7 +272,7 @@ nfs_proc_mknod(struct inode *dir, struct dentry *dentry, struct iattr *sattr,
 		sattr->ia_valid &= ~ATTR_SIZE;
 	} else if (S_ISCHR(mode) || S_ISBLK(mode)) {
 		sattr->ia_valid |= ATTR_SIZE;
-		sattr->ia_size = new_encode_dev(rdev);
+		sattr->ia_size = new_encode_dev(rdev);/* get out your barf bag */
 	}
 
 	data = nfs_alloc_createdata(dir, dentry, sattr);
@@ -350,8 +332,6 @@ static void nfs_proc_unlink_rpc_prepare(struct rpc_task *task, struct nfs_unlink
 
 static int nfs_proc_unlink_done(struct rpc_task *task, struct inode *dir)
 {
-	if (nfs_async_handle_expired_key(task))
-		return 0;
 	nfs_mark_for_revalidate(dir);
 	return 1;
 }
@@ -371,8 +351,6 @@ static int
 nfs_proc_rename_done(struct rpc_task *task, struct inode *old_dir,
 		     struct inode *new_dir)
 {
-	if (nfs_async_handle_expired_key(task))
-		return 0;
 	nfs_mark_for_revalidate(old_dir);
 	nfs_mark_for_revalidate(new_dir);
 	return 1;
@@ -459,6 +437,11 @@ nfs_proc_symlink(struct inode *dir, struct dentry *dentry, struct page *page,
 	status = rpc_call_sync(NFS_CLIENT(dir), &msg, 0);
 	nfs_mark_for_revalidate(dir);
 
+	/*
+	 * V2 SYMLINK requests don't return any attributes.  Setting the
+	 * filehandle size to zero indicates to nfs_instantiate that it
+	 * should fill in the data with a LOOKUP call on the wire.
+	 */
 	if (status == 0)
 		status = nfs_instantiate(dentry, fh, fattr);
 
@@ -517,6 +500,13 @@ nfs_proc_rmdir(struct inode *dir, struct qstr *name)
 	return status;
 }
 
+/*
+ * The READDIR implementation is somewhat hackish - we pass a temporary
+ * buffer to the encode function, which installs it in the receive
+ * the receive iovec. The decode function just parses the reply to make
+ * sure it is syntactically correct; the entries itself are decoded
+ * from nfs_readdir by calling the decode_entry function directly.
+ */
 static int
 nfs_proc_readdir(struct dentry *dentry, struct rpc_cred *cred,
 		 u64 cookie, struct page **pages, unsigned int count, int plus)
@@ -614,12 +604,12 @@ nfs_proc_pathconf(struct nfs_server *server, struct nfs_fh *fhandle,
 
 static int nfs_read_done(struct rpc_task *task, struct nfs_read_data *data)
 {
-	if (nfs_async_handle_expired_key(task))
-		return -EAGAIN;
-
 	nfs_invalidate_atime(data->inode);
 	if (task->tk_status >= 0) {
 		nfs_refresh_inode(data->inode, data->res.fattr);
+		/* Emulate the eof flag, which isn't normally needed in NFSv2
+		 * as it is guaranteed to always return the file attributes
+		 */
 		if (data->args.offset + data->args.count >= data->res.fattr->size)
 			data->res.eof = 1;
 	}
@@ -638,9 +628,6 @@ static void nfs_proc_read_rpc_prepare(struct rpc_task *task, struct nfs_read_dat
 
 static int nfs_write_done(struct rpc_task *task, struct nfs_write_data *data)
 {
-	if (nfs_async_handle_expired_key(task))
-		return -EAGAIN;
-
 	if (task->tk_status >= 0)
 		nfs_post_op_update_inode_force_wcc(data->inode, data->res.fattr);
 	return 0;
@@ -648,7 +635,7 @@ static int nfs_write_done(struct rpc_task *task, struct nfs_write_data *data)
 
 static void nfs_proc_write_setup(struct nfs_write_data *data, struct rpc_message *msg)
 {
-	
+	/* Note: NFSv2 ignores @stable and always uses NFS_FILE_SYNC */
 	data->args.stable = NFS_FILE_SYNC;
 	msg->rpc_proc = &nfs_procedures[NFSPROC_WRITE];
 }
@@ -672,6 +659,7 @@ nfs_proc_lock(struct file *filp, int cmd, struct file_lock *fl)
 	return nlmclnt_proc(NFS_SERVER(inode)->nlm_host, cmd, fl);
 }
 
+/* Helper functions for NFS lock bounds checking */
 #define NFS_LOCK32_OFFSET_MAX ((__s32)0x7fffffffUL)
 static int nfs_lock_check_bounds(const struct file_lock *fl)
 {
@@ -696,7 +684,7 @@ out_einval:
 }
 
 const struct nfs_rpc_ops nfs_v2_clientops = {
-	.version	= 2,		       
+	.version	= 2,		       /* protocol version */
 	.dentry_ops	= &nfs_dentry_operations,
 	.dir_inode_ops	= &nfs_dir_inode_operations,
 	.file_inode_ops	= &nfs_file_inode_operations,
@@ -705,7 +693,7 @@ const struct nfs_rpc_ops nfs_v2_clientops = {
 	.getattr	= nfs_proc_getattr,
 	.setattr	= nfs_proc_setattr,
 	.lookup		= nfs_proc_lookup,
-	.access		= NULL,		       
+	.access		= NULL,		       /* access */
 	.readlink	= nfs_proc_readlink,
 	.create		= nfs_proc_create,
 	.remove		= nfs_proc_remove,
