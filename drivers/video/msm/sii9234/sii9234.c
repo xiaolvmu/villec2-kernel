@@ -98,9 +98,12 @@ static bool sii9244_interruptable = false;
 static bool need_simulate_cable_out = false;
 #ifdef CONFIG_INTERNAL_CHARGING_SUPPORT
 static bool g_bPollDetect = false;
+#ifdef CONFIG_ARCH_MSM8X60
+int htc_batt_turn_off_mhl_dongle_5v(void);
 #endif
-static struct dentry *dbg_entry_dir, *dbg_entry_a3, *dbg_entry_dbg_on;
-u8 dbg_drv_str_a3 = 0xEB, dbg_drv_str_on = 0;
+#endif
+static struct dentry *dbg_entry_dir, *dbg_entry_a3, *dbg_entry_a6, *dbg_entry_dbg_on;
+u8 dbg_drv_str_a3 = 0xEB, dbg_drv_str_a6 = 0x0C, dbg_drv_str_on = 0;
 void hdmi_set_switch_state(bool enable);
 
 #define MHL_RCP_KEYEVENT
@@ -137,8 +140,12 @@ void check_mhl_5v_status(void)
 	if (!pInfo)
 		return;
 	if(pInfo->isMHL && (pInfo->statMHL == CONNECT_TYPE_MHL_AC || pInfo->statMHL == CONNECT_TYPE_USB )){
-		if(pInfo->enable_5v)
-			pInfo->enable_5v(0);
+#ifdef CONFIG_ARCH_MSM8X60
+	htc_batt_turn_off_mhl_dongle_5v();
+#else
+	if(pInfo->enable_5v)
+		pInfo->enable_5v(0);
+#endif
 	}
 }
 #endif
@@ -622,8 +629,12 @@ static void mhl_turn_off_5v(struct work_struct *w)
 	T_MHL_SII9234_INFO *pInfo = sii9234_info_ptr;
 	if (!pInfo)
 		return;
+#ifdef CONFIG_ARCH_MSM8X60
+	htc_batt_turn_off_mhl_dongle_5v();
+#else
 	if(pInfo->enable_5v)
 		pInfo->enable_5v(0);
+#endif
 }
 static void mhl_on_delay_handler(struct work_struct *w)
 {
@@ -657,9 +668,12 @@ static int sii_debugfs_init(void)
 		PR_DISP_DEBUG("Fail to create debugfs dir: mhl_debugfs\n");
 		return -1;
 	}
-	dbg_entry_a3 = debugfs_create_u8("strength", 0644, dbg_entry_dir, &dbg_drv_str_a3);
+	dbg_entry_a3 = debugfs_create_u8("strength_a3", 0644, dbg_entry_dir, &dbg_drv_str_a3);
 	if (!dbg_entry_a3)
-		PR_DISP_DEBUG("Fail to create debugfs: strength\n");
+		PR_DISP_DEBUG("Fail to create debugfs: strength_a3\n");
+	dbg_entry_a6 = debugfs_create_u8("strength_a6", 0644, dbg_entry_dir, &dbg_drv_str_a6);
+	if (!dbg_entry_a6)
+		PR_DISP_DEBUG("Fail to create debugfs: strength_a6\n");
 	dbg_entry_dbg_on = debugfs_create_u8("dbg_on", 0644, dbg_entry_dir, &dbg_drv_str_on);
 	if (!dbg_entry_dbg_on)
 		PR_DISP_DEBUG("Fail to create debugfs: dbg_on\n");
@@ -735,7 +749,9 @@ static int sii9234_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&pInfo->detect_charger_work, detect_charger_handler);
 #endif
 	irq_jiffies = jiffies;
+#ifndef CONFIG_ARCH_MSM8X60
 	pInfo->irq = gpio_to_irq(pInfo->irq);
+#endif
 	ret = request_irq(pInfo->irq, sii9234_irq_handler, IRQF_TRIGGER_LOW, "mhl_sii9234_evt", pInfo);
 	if (ret < 0) {
 		PR_DISP_DEBUG("%s: request_irq(%d) failed for gpio %d (%d)\n",

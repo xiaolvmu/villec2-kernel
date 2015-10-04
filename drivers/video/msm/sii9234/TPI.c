@@ -34,7 +34,7 @@ static int WR_Dcap_Rdy_Int_Done = false;
 static bool IsEstablished = false;
 extern bool g_bProbe;
 extern bool disable_interswitch;
-extern u8 dbg_drv_str_a3, dbg_drv_str_on;
+extern u8 dbg_drv_str_a3, dbg_drv_str_a6, dbg_drv_str_on;
 
 
 static	uint8_t	fwPowerState = POWER_STATE_FIRST_INIT;
@@ -411,11 +411,13 @@ static void WriteInitialRegisterValues(void)
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0xA1, 0xFC);
 
 	
-	if(dbg_drv_str_on)
+	if(dbg_drv_str_on){
 		I2C_WriteByte(TPI_SLAVE_ADDR, 0xA3, dbg_drv_str_a3);
-	else
+		I2C_WriteByte(TPI_SLAVE_ADDR, 0xA6, dbg_drv_str_a6);
+	}else{
 		I2C_WriteByte(TPI_SLAVE_ADDR, 0xA3, 0xEB);
-	I2C_WriteByte(TPI_SLAVE_ADDR, 0xA6, 0x0C);
+		I2C_WriteByte(TPI_SLAVE_ADDR, 0xA6, 0x0C);
+	}
 
 	I2C_WriteByte(TPI_SLAVE_ADDR, 0x2B, 0x01);
 
@@ -663,6 +665,7 @@ void change_driving_strength(byte reg_a3, byte reg_a6)
 	
 	if( dbg_drv_str_on) {
 		TPI_DEBUG_PRINT(("Drv: %s debuging driving str 0xA3 = %x\n", __func__, dbg_drv_str_a3));
+		TPI_DEBUG_PRINT(("Drv: %s debuging driving str 0xA6 = %x\n", __func__, dbg_drv_str_a6));
 		return;
 	}
 	TPI_DEBUG_PRINT(("Drv: %s 0xA3 = %x 0xA6 = %x\n",
