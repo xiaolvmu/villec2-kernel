@@ -35,7 +35,6 @@ struct subsys_private;
 struct bus_type;
 struct device_node;
 struct iommu_ops;
-struct iommu_group;
 
 struct bus_attribute {
 	struct attribute	attr;
