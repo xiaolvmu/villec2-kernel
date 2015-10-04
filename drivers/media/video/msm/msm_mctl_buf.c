@@ -18,7 +18,6 @@
 #include <linux/spinlock.h>
 #include <linux/videodev2.h>
 #include <linux/vmalloc.h>
-#include <linux/msm_ion.h>
 #include <media/v4l2-dev.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-device.h>
