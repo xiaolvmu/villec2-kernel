@@ -1,8 +1,11 @@
 GCC_VERSION      := $(shell $(CONFIG_SHELL) $(PWD)/scripts/gcc-version.sh $(CROSS_COMPILE)gcc)
 EXTRA_CFLAGS += -Idrivers/media/video/msm
 EXTRA_CFLAGS += -Idrivers/media/video/msm/io
+EXTRA_CFLAGS += -Idrivers/media/video/msm/sensors
+obj-$(CONFIG_TI201_ACT) += LC898111/
 obj-$(CONFIG_MSM_ACTUATOR) += msm_actuator.o
 obj-$(CONFIG_IMX074_ACT) += imx074_act.o
+obj-$(CONFIG_IMX105_ACT) += imx105_act.o
 obj-$(CONFIG_AD5823_ACT) += ad5823_act.o
 obj-$(CONFIG_AD5816_ACT) += ad5816_act.o
 obj-$(CONFIG_TI201_ACT) += ti201_act.o
@@ -12,3 +15,4 @@ obj-$(CONFIG_AD5046_ACT) += ad5046_act.o
 obj-$(CONFIG_IMX175_ACT) += imx175_act.o
 obj-$(CONFIG_OV5693_ACT) += ov5693_act.o
 obj-$(CONFIG_RUMBAS_ACT) += rumbas_act.o
+obj-$(CONFIG_LC898212_ACT) += lc898212_act.o

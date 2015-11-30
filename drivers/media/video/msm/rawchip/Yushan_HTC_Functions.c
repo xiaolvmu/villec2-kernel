@@ -366,6 +366,10 @@ int Yushan_sensor_open_init(struct rawchip_sensor_init_data data)
 	uint32_t		udwIntrMask[] = {0x3DE38E3B, 0xFC3C3C3C, 0x001B7FFB};	
 	uint16_t		uwAssignITRGrpToPad1 = 0x008; 
 
+#ifdef CONFIG_DISABLE_MCLK_RAWCHIP_TO_MAINCAM
+	uint8_t bSpiData = 0;
+#endif
+
 #if 0
 	Yushan_AF_ROI_t					sYushanAfRoi[5];
 	Yushan_DXO_ROI_Active_Number_t	sYushanDxoRoiActiveNumber;
@@ -706,8 +710,21 @@ int Yushan_sensor_open_init(struct rawchip_sensor_init_data data)
 	    sDxoDopTuning.bNoiseVsDetailsMedGain = 0x80;
 	    sDxoDopTuning.bNoiseVsDetailsHiGain = 0xA8;
 	    sDxoDopTuning.bSharpness = 0;
-		
+#if defined(CONFIG_MACH_MONARUDO) ||\
+    defined(CONFIG_MACH_DELUXE_J) ||\
+    defined(CONFIG_MACH_DELUXE_R) ||\
+    defined(CONFIG_MACH_IMPRESSION_J) ||\
+    defined(CONFIG_MACH_DUMMY) ||\
+    defined(CONFIG_MACH_DUMMY) ||\
+    defined(CONFIG_MACH_DUMMY)
+		bDppMode =0; 
+#endif
 		bDopMode =0xd;
+	}
+	else if (strcmp(data.sensor_name, "ov5693") == 0)
+	{
+		sDxoDopTuning.bDenoisingMedGain = 0x30;
+		sDxoDopTuning.bDenoisingHiGain = 0x30;
 	}
 	else
 	{
@@ -840,6 +857,15 @@ int Yushan_sensor_open_init(struct rawchip_sensor_init_data data)
 	
 	bSpiData = 0;
 	SPI_Write(YUSHAN_SMIA_FM_EOF_INT_EN, 1,  &bSpiData);
+#endif
+
+#ifdef CONFIG_DISABLE_MCLK_RAWCHIP_TO_MAINCAM
+	if (strcmp(data.sensor_name, "s5k6a2ya") == 0) {
+		SPI_Read(YUSHAN_CLK_CTRL, 1, (uint8_t*)(&bSpiData)); 
+		bSpiData &= 0xEF; 
+		SPI_Write(YUSHAN_CLK_CTRL, 1, (uint8_t*)(&bSpiData));
+		pr_info("[CAM] Disable MCLK of main cam");
+	}
 #endif
 
 	return (bStatus == SUCCESS) ? 0 : -1;

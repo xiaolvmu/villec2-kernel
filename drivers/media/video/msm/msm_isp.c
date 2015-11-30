@@ -31,6 +31,8 @@
 
 #include "msm.h"
 
+#include "swfv/swfa_k.h"
+
 #ifdef CONFIG_MSM_CAMERA_DEBUG
 #define D(fmt, args...) pr_debug("msm_isp: " fmt, ##args)
 #else
@@ -38,6 +40,8 @@
 #endif
 
 #define MSM_FRAME_AXI_MAX_BUF 32
+#define BAYER_FOCUS_BUF_SIZE 		(18 * 14 * 10 * 4)
+#define SW_FOCUS_BUF_SIZE 			32*1024
 
 
 void *msm_isp_sync_alloc(int size,
@@ -133,6 +137,14 @@ int msm_isp_vfe_msg_to_img_mode(struct msm_cam_media_controller *pmctl,
 			image_mode = -1;
 			break;
 		}
+	} else if (vfe_msg == VFE_MSG_OUTPUT_TERTIARY1) {
+		switch (pmctl->vfe_output_mode) {
+		case VFE_OUTPUTS_RDI0:
+			image_mode = MSM_V4L2_EXT_CAPTURE_MODE_RDI;
+			break;
+		default:
+			image_mode = -1;
+		}
 	} else
 		image_mode = -1;
 
@@ -141,21 +153,20 @@ int msm_isp_vfe_msg_to_img_mode(struct msm_cam_media_controller *pmctl,
 	return image_mode;
 }
 
-static int msm_isp_notify_VFE_BUF_EVT(struct v4l2_subdev *sd, void *arg)
+static int msm_isp_notify_VFE_BUF_EVT(struct msm_cam_media_controller *pmctl,
+					struct v4l2_subdev *sd, void *arg)
 {
 	int rc = -EINVAL, image_mode;
 	struct msm_vfe_resp *vdata = (struct msm_vfe_resp *)arg;
 	struct msm_free_buf free_buf, temp_free_buf;
 	struct msm_camvfe_params vfe_params;
 	struct msm_vfe_cfg_cmd cfgcmd;
-	struct msm_cam_media_controller *pmctl =
-		(struct msm_cam_media_controller *)v4l2_get_subdev_hostdata(sd);
 	struct msm_cam_v4l2_device *pcam = pmctl->pcam_ptr;
 	
 
 	int vfe_id = vdata->evt_msg.msg_id;
 	if (!pcam) {
-		pr_debug("%s pcam is null. return\n", __func__);
+		D("%s pcam is null. return\n", __func__);
 		msm_isp_sync_free(vdata);
 		return rc;
 	}
@@ -185,7 +196,7 @@ static int msm_isp_notify_VFE_BUF_EVT(struct v4l2_subdev *sd, void *arg)
 		break;
 	case VFE_MSG_V32_CAPTURE:
 	case VFE_MSG_V2X_CAPTURE:
-		pr_debug("%s Got V32_CAPTURE: getting buffer for id = %d",
+		D("%s Got V32_CAPTURE: getting buffer for id = %d",
 						__func__, vfe_id);
 		msm_mctl_reserve_free_buf(pmctl, NULL,
 					image_mode, &free_buf);
@@ -258,7 +269,7 @@ static int msm_enable_dropframe(struct v4l2_subdev *sd,
 		return -EFAULT;
 	} else {
 		atomic_set(&pmctl->dropframe_enabled, dropframe_enabled);
-		pr_info("%s: set dropframe_enabled %d", __func__, atomic_read(&pmctl->dropframe_enabled));
+		D("%s: set dropframe_enabled %d", __func__, atomic_read(&pmctl->dropframe_enabled));
 
 		
 		if (!dropframe_enabled)
@@ -278,7 +289,7 @@ static int msm_set_dropframe_num(struct v4l2_subdev *sd,
 		return -EFAULT;
 	} else {
 		atomic_set(&pmctl->snap_dropframe_num, snap_dropframe_num);
-		pr_info("%s: set snap_dropframe_num %d", __func__, atomic_read(&pmctl->snap_dropframe_num));
+		D("%s: set snap_dropframe_num %d", __func__, atomic_read(&pmctl->snap_dropframe_num));
 	}
 
 	return 0;
@@ -318,7 +329,7 @@ static int msm_isp_should_drop_frame(struct msm_cam_media_controller *pmctl, uin
 	}
 
 	if (atomic_read(&pmctl->dropframe_enabled))
-		pr_info("%s: FRAME (%d): drop_frame %d [enable %d num %d drop_snap %d]",
+		D("%s: FRAME (%d): drop_frame %d [enable %d num %d drop_snap %d]",
 				__func__, msgid, drop_frame,
 				atomic_read(&pmctl->dropframe_enabled),
 				atomic_read(&pmctl->snap_dropframe_num),
@@ -328,7 +339,7 @@ static int msm_isp_should_drop_frame(struct msm_cam_media_controller *pmctl, uin
 }
 
 static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
-	unsigned int notification,  void *arg)
+	unsigned int notification,  void *arg, uint32_t interface)
 {
 	int rc = 0;
 	struct v4l2_event v4l2_evt;
@@ -336,6 +347,18 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 	struct msm_cam_media_controller *pmctl =
 		(struct msm_cam_media_controller *)v4l2_get_subdev_hostdata(sd);
 	struct msm_free_buf buf;
+	unsigned long pphy;
+	int newWidth;
+	int newHeight;
+	struct msm_cam_media_controller *rdi0_mctl = msm_camera_get_rdi0_mctl();
+
+	if (interface == RDI_0) {
+		if (rdi0_mctl != NULL)
+			pmctl = rdi0_mctl;
+	} else {
+		if (pmctl == rdi0_mctl)
+			pmctl = msm_camera_get_pix0_mctl();
+	}
 
 	if (!pmctl) {
 		pr_err("%s: no context in dsp callback.\n", __func__);
@@ -344,7 +367,7 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 	}
 
 	if (notification == NOTIFY_VFE_BUF_EVT)
-		return msm_isp_notify_VFE_BUF_EVT(sd, arg);
+		return msm_isp_notify_VFE_BUF_EVT(pmctl, sd, arg);
 
 	if (notification == NOTIFY_VFE_BUF_FREE_EVT)
 		return msm_isp_notify_VFE_BUF_FREE_EVT(sd, arg);
@@ -380,7 +403,7 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 			isp_msg->msg_id == MSG_ID_SOF_ACK)
 		{
 			isp_event->isp_data.isp_msg.msg_id = MSG_ID_HDR_SOF_ACK;
-			pr_info("%s MSG_ID_HDR_SOF_ACK", __func__);
+			D("%s MSG_ID_HDR_SOF_ACK", __func__);
 		}
 
 		break;
@@ -415,6 +438,9 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 			break;
 		case MSG_ID_OUTPUT_SECONDARY:
 			msgid = VFE_MSG_OUTPUT_SECONDARY;
+			break;
+		case MSG_ID_OUTPUT_TERTIARY1:
+			msgid = VFE_MSG_OUTPUT_TERTIARY1;
 			break;
 		default:
 			pr_err("%s: Invalid VFE output id: %d\n",
@@ -491,7 +517,6 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 			rc = -EINVAL;
 			return rc;
 		}
-
 		isp_event->isp_data.isp_msg.msg_id = isp_stats->id;
 		isp_event->isp_data.isp_msg.frame_id =
 			isp_stats->frameCounter;
@@ -508,9 +533,41 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 			stats.aec.fd = stats.fd;
 			break;
 		case MSG_ID_STATS_AF:
-		case MSG_ID_STATS_BF:
 			stats.af.buff = stats.buffer;
 			stats.af.fd = stats.fd;
+			break;
+		case MSG_ID_STATS_BF:
+		    newWidth = 0;
+		    newHeight = 0;
+		    stats.htc_af_info.af_input.af_use_sw_sharpness = false;
+		    if (pmctl->htc_af_info.af_input.af_use_sw_sharpness) {
+
+			    pphy = msm_pmem_stats_ptov_lookup_2(pmctl,
+						isp_stats->buffer,
+						&(stats.fd));
+
+			    memset((uint8_t *)(pphy+BAYER_FOCUS_BUF_SIZE), 0x00, SW_FOCUS_BUF_SIZE);
+
+			    rc = swfa_Transform2((uint8_t *)(pphy+BAYER_FOCUS_BUF_SIZE),
+			                          &newWidth,
+			                          &newHeight);
+
+			    if(!rc)
+				    stats.htc_af_info.af_input.af_use_sw_sharpness = false;
+			    else
+				    stats.htc_af_info.af_input.af_use_sw_sharpness = pmctl->htc_af_info.af_input.af_use_sw_sharpness;
+			}
+
+			stats.htc_af_info.af_input.preview_width = pmctl->htc_af_info.af_input.preview_width;
+			stats.htc_af_info.af_input.preview_height = pmctl->htc_af_info.af_input.preview_height;
+			stats.htc_af_info.af_input.roi_x = pmctl->htc_af_info.af_input.roi_x;
+			stats.htc_af_info.af_input.roi_y = pmctl->htc_af_info.af_input.roi_y;
+			stats.htc_af_info.af_input.roi_width = newWidth;
+			stats.htc_af_info.af_input.roi_height = newHeight;
+
+			stats.af.buff = stats.buffer;
+			stats.af.fd = stats.fd;
+
 			break;
 		case MSG_ID_STATS_AWB:
 			stats.awb.buff = stats.buffer;
@@ -582,7 +639,32 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 static int msm_isp_notify(struct v4l2_subdev *sd,
 	unsigned int notification, void *arg)
 {
-	return msm_isp_notify_vfe(sd, notification, arg);
+	uint32_t interface = PIX_0;
+
+	switch (notification) {
+	case NOTIFY_ISP_MSG_EVT:
+		if (((struct isp_msg_event *)arg)->msg_id == MSG_ID_RDI0_UPDATE_ACK)
+			interface = RDI_0;
+		break;
+	case NOTIFY_VFE_MSG_OUT:
+		if (((struct isp_msg_output *)arg)->output_id == MSG_ID_OUTPUT_TERTIARY1)
+			interface = RDI_0;
+		break;
+	case NOTIFY_VFE_BUF_EVT: {
+		struct msm_vfe_resp *rp;
+		rp = (struct msm_vfe_resp *)arg;
+		if (rp->evt_msg.msg_id == VFE_MSG_OUTPUT_TERTIARY1)
+			interface = RDI_0;
+		}
+		break;
+	case NOTIFY_AXI_RDI_SOF_COUNT:
+		interface = RDI_0;
+		break;
+	default:
+		break;
+	}
+
+	return msm_isp_notify_vfe(sd, notification, arg, interface);
 }
 
 static int msm_isp_open(struct v4l2_subdev *sd,
@@ -634,7 +716,7 @@ static void msm_isp_release(struct msm_cam_media_controller *mctl,
 	struct v4l2_subdev *sd)
 {
 	D("%s\n", __func__);
-	msm_vfe_subdev_release(sd);
+	msm_vfe_subdev_release(sd, mctl);
 	if (mctl->ping_imem_y)
 		msm_iommu_unmap_contig_buffer(mctl->ping_imem_y,
 			CAMERA_DOMAIN, GEN_POOL,
@@ -836,6 +918,11 @@ static int msm_axi_config(struct v4l2_subdev *sd,
 	case CMD_AXI_CFG_PRIM|CMD_AXI_CFG_SEC:
 	case CMD_AXI_CFG_PRIM|CMD_AXI_CFG_SEC_ALL_CHNLS:
 	case CMD_AXI_CFG_PRIM_ALL_CHNLS|CMD_AXI_CFG_SEC:
+	case CMD_AXI_START:
+	case CMD_AXI_STOP:
+#if (CONFIG_HTC_CAMERA_HAL_VERSION == 4)
+	case CMD_AXI_CFG_TERT1:
+#endif
 		return msm_isp_subdev_ioctl(sd, &cfgcmd, NULL);
 
 	default:
