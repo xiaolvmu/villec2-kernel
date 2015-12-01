@@ -128,7 +128,6 @@ static int msm_pmem_table_add(struct hlist_head *ptype,
 
 	unsigned long len;
 	struct msm_pmem_region *region;
-	void *vaddr;
 
 	region = kmalloc(sizeof(struct msm_pmem_region), GFP_KERNEL);
 	if (!region)
@@ -138,16 +137,8 @@ static int msm_pmem_table_add(struct hlist_head *ptype,
 	if (IS_ERR_OR_NULL(region->handle))
 		goto out1;
 	if (ion_map_iommu(client, region->handle, CAMERA_DOMAIN, GEN_POOL,
-				  SZ_4K, 0, &paddr, &len, 0, 0) < 0)
+				  SZ_4K, 0, &paddr, &len, UNCACHED, 0) < 0)
 		goto out2;
-
-	vaddr = ion_map_kernel(client, region->handle);
-	if (IS_ERR_OR_NULL(vaddr)) {
-		pr_err("%s: could not get virtual address\n", __func__);
-		return 0;
-	}
-	region->vaddr = (unsigned long) vaddr;
-
 #elif CONFIG_ANDROID_PMEM
 	rc = get_pmem_file(info->fd, &paddr, &kvstart, &len, &file);
 	if (rc < 0) {
@@ -394,27 +385,6 @@ unsigned long msm_pmem_stats_ptov_lookup(
 			*fd = region->info.fd;
 			region->info.active = 0;
 			return (unsigned long)(region->info.vaddr);
-		}
-	}
-
-    if (addr != 0)
-        pr_err("%s: abnormal addr == 0X%x\n", __func__, (uint32_t)addr);
-
-	return 0;
-}
-
-unsigned long msm_pmem_stats_ptov_lookup_2(
-		struct msm_cam_media_controller *mctl,
-		unsigned long addr, int *fd)
-{
-	struct msm_pmem_region *region;
-	struct hlist_node *node, *n;
-
-	hlist_for_each_entry_safe(region, node, n,
-	&mctl->stats_info.pmem_stats_list, list) {
-		if (addr == region->paddr) {
-			*fd = region->info.fd;
-			return (unsigned long)(region->vaddr);
 		}
 	}
 

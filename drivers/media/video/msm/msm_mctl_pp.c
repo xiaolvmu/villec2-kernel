@@ -145,11 +145,6 @@ static int is_buf_in_queue(struct msm_cam_v4l2_device *pcam,
 	&pcam_inst->free_vq, list) {
 		buf_idx = buf->vidbuf.v4l2_buf.index;
 		mem = vb2_plane_cookie(&buf->vidbuf, 0);
-		if (!mem) {
-			pr_err("%s: mem is null\n",__func__);
-			continue;
-		}
-
 		if (mem->buffer_type ==	VIDEOBUF2_MULTIPLE_PLANES)
 			offset = mem->offset.data_offset +
 				pcam_inst->buf_offset[buf_idx][0].data_offset;
@@ -158,8 +153,7 @@ static int is_buf_in_queue(struct msm_cam_v4l2_device *pcam,
 		buf_phyaddr = (unsigned long)
 			videobuf2_to_pmem_contig(&buf->vidbuf, 0) +
 			offset;
-		if (!buf_phyaddr)
-		pr_info("%s vb_idx=%d,vb_paddr=0x%x ch0=0x%x\n",
+		D("%s vb_idx=%d,vb_paddr=0x%x ch0=0x%x\n",
 		  __func__, buf->vidbuf.v4l2_buf.index,
 		  buf_phyaddr, fbuf->ch_paddr[0]);
 		if (fbuf->ch_paddr[0] == buf_phyaddr) {
@@ -244,10 +238,6 @@ int msm_mctl_do_pp_divert(
 	D("%s Diverting frame %x id %d to userspace ", __func__,
 		(int)div.frame.handle, div.frame.frame_id);
 	mem = vb2_plane_cookie(&vb->vidbuf, 0);
-	if (!mem) {
-		pr_info("%s mem is null\n", __func__);
-		return -EINVAL;
-	}
 	div.frame.path = mem->path;
 	div.frame.node_type = node;
 	if (mem->buffer_type == VIDEOBUF2_SINGLE_PLANE) {
@@ -266,10 +256,6 @@ int msm_mctl_do_pp_divert(
 		div.frame.num_planes	= pcam_inst->plane_info.num_planes;
 		for (i = 0; i < div.frame.num_planes; i++) {
 			mem = vb2_plane_cookie(&vb->vidbuf, i);
-			if (!mem) {
-				pr_info("%s mem is null\n", __func__);
-				return -EINVAL;
-			}
 			div.frame.mp[i].phy_addr =
 				videobuf2_to_pmem_contig(&vb->vidbuf, i);
 			if (!pcam_inst->buf_offset)
@@ -308,10 +294,6 @@ static int msm_mctl_pp_get_phy_addr(
 	pp_frame->timestamp = vb->vidbuf.v4l2_buf.timestamp;
 	pp_frame->buf_idx = buf_idx;
 	mem = vb2_plane_cookie(&vb->vidbuf, 0);
-	if (!mem) {
-	pr_info("%s mem is null\n", __func__);
-	return -EINVAL;
-	}
 	pp_frame->image_type = (unsigned short)mem->path;
 	if (mem->buffer_type == VIDEOBUF2_SINGLE_PLANE) {
 		pp_frame->num_planes = 1;
@@ -326,10 +308,6 @@ static int msm_mctl_pp_get_phy_addr(
 		pp_frame->num_planes = pcam_inst->plane_info.num_planes;
 		for (i = 0; i < pp_frame->num_planes; i++) {
 			mem = vb2_plane_cookie(&vb->vidbuf, i);
-			if (!mem) {
-				pr_info("%s mem is null\n", __func__);
-				return -EINVAL;
-			}
 			pp_frame->mp[i].addr_offset = mem->addr_offset;
 			pp_frame->mp[i].phy_addr =
 				videobuf2_to_pmem_contig(&vb->vidbuf, i);
@@ -337,8 +315,7 @@ static int msm_mctl_pp_get_phy_addr(
 			pcam_inst->buf_offset[buf_idx][i].data_offset;
 			pp_frame->mp[i].fd = (int)mem->vaddr;
 			pp_frame->mp[i].length = mem->size;
-			if (!pp_frame->mp[i].phy_addr)
-			pr_info("%s frame id %d buffer %d plane %d phy addr 0x%x"
+			D("%s frame id %d buffer %d plane %d phy addr 0x%x"
 				" fd %d length %d\n", __func__,
 				pp_frame->frame_id, buf_idx, i,
 				(uint32_t)pp_frame->mp[i].phy_addr,

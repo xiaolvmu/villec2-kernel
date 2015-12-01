@@ -34,7 +34,6 @@ struct ispif_device {
 	struct completion reset_complete;
 	uint32_t csid_version;
 	struct clk *ispif_clk[5];
-	uint32_t rdi0_sof_count;
 };
 
 struct ispif_isr_queue_cmd {
@@ -65,6 +64,5 @@ struct ispif_isr_queue_cmd {
 #define RDI_1 (0x01 << 3)
 
 void msm_ispif_vfe_get_cid(uint8_t intftype, char *cids, int *num);
-void msm_ispif_get_input_sel_cid(uint8_t intftype, uint8_t *csid);
 
 #endif
