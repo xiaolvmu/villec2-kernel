@@ -5179,7 +5179,7 @@ struct ion_platform_heap msm8660_heaps[] = {
 
 static struct ion_platform_data ion_pdata = {
         .nr = MSM_ION_HEAP_NUM,
-        .heaps = { msm8660_heaps },
+        .heaps = msm8660_heaps,
 };
 
 static struct platform_device ion_dev = {
