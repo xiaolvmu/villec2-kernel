@@ -18,7 +18,7 @@
 #include <linux/io.h>
 #include <linux/msm_ssbi.h>
 #include <linux/mfd/pmic8058.h>
-#include <linux/msm_ion.h>
+
 #include <linux/leds.h>
 #include <linux/leds-pm8058.h>
 #include <linux/cm3629.h>
@@ -5175,11 +5175,7 @@ struct ion_platform_heap msm8660_heaps[] = {
 			.extra_data = (void *)&co_ion_pdata,
 		},
 #endif
-};
-
-static struct ion_platform_data ion_pdata = {
-        .nr = MSM_ION_HEAP_NUM,
-        .heaps = { msm8660_heaps },
+	}
 };
 
 static struct platform_device ion_dev = {
@@ -5245,7 +5241,7 @@ static void __init reserve_ion_memory(void)
 	for (i = 0; i < ion_pdata.nr; i++) {
 		struct ion_platform_heap *heap = &(ion_pdata.heaps[i]);
 
-		if (heap->extra_data && ((int)heap->type) == ION_HEAP_TYPE_CP) {
+		if (heap->extra_data && heap->type == ION_HEAP_TYPE_CP) {
 			int map_all = ((struct ion_cp_heap_pdata *)
 				heap->extra_data)->iommu_map_all;
 
