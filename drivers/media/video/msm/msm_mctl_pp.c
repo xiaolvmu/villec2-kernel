@@ -28,12 +28,25 @@
 #include <linux/android_pmem.h>
 
 #include "msm.h"
+#include "msm_vpe.h"
 
 #ifdef CONFIG_MSM_CAMERA_DEBUG
 #define D(fmt, args...) pr_debug("msm_mctl: " fmt, ##args)
 #else
 #define D(fmt, args...) do {} while (0)
 #endif
+
+static int msm_mctl_pp_vpe_ioctl(struct v4l2_subdev *vpe_sd,
+	struct msm_mctl_pp_cmd *cmd, void *data)
+{
+	int rc = 0;
+	struct msm_mctl_pp_params parm;
+	parm.cmd = cmd;
+	parm.data = data;
+	rc = v4l2_subdev_call(vpe_sd, core, ioctl, VIDIOC_MSM_VPE_CFG, &parm);
+	return rc;
+}
+
 
 static int msm_mctl_pp_buf_divert(
 			struct msm_cam_media_controller *pmctl,
@@ -54,7 +67,7 @@ static int msm_mctl_pp_buf_divert(
 	v4l2_evt.type = V4L2_EVENT_PRIVATE_START +
 			MSM_CAM_RESP_DIV_FRAME_EVT_MSG;
 	*((uint32_t *)v4l2_evt.u.data) = (uint32_t)isp_event;
-	/* Copy the divert frame struct into event ctrl struct. */
+	
 	isp_event->isp_data.div_frame = *div;
 
 	D("%s inst=%p, img_mode=%d, frame_id=%d\n", __func__,
@@ -95,14 +108,20 @@ int msm_mctl_check_pp(struct msm_cam_media_controller *p_mctl,
 			*pp_type = OUTPUT_TYPE_V;
 		break;
 	case MSM_V4L2_EXT_CAPTURE_MODE_THUMBNAIL:
+		pp_key = PP_THUMB;
+		if (p_mctl->pp_info.pp_key & pp_key)
+			*pp_divert_type = OUTPUT_TYPE_T;
 		if (p_mctl->pp_info.pp_ctrl.pp_msg_type == OUTPUT_TYPE_T)
 			*pp_type = OUTPUT_TYPE_T;
 		break;
 	default:
 		break;
 	}
-	if (p_mctl->pp_info.div_frame[image_mode].ch_paddr[0])
-		*pp_divert_type = 0;
+	if (p_mctl->vfe_output_mode != VFE_OUTPUTS_MAIN_AND_THUMB &&
+		p_mctl->vfe_output_mode != VFE_OUTPUTS_THUMB_AND_MAIN) {
+		if (p_mctl->pp_info.div_frame[image_mode].ch_paddr[0])
+			*pp_divert_type = 0;
+	}
 	spin_unlock_irqrestore(&p_mctl->pp_info.lock, flags);
 	D("%s: pp_type=%d, pp_divert_type = %d",
 	__func__, *pp_type, *pp_divert_type);
@@ -150,13 +169,10 @@ static struct msm_cam_v4l2_dev_inst *msm_mctl_get_pcam_inst_for_divert(
 		int image_mode, struct msm_free_buf *fbuf, int *node_type)
 {
 	struct msm_cam_v4l2_dev_inst *pcam_inst = NULL;
-	struct msm_cam_v4l2_device *pcam = pmctl->sync.pcam_sync;
+	struct msm_cam_v4l2_device *pcam = pmctl->pcam_ptr;
 	int idx;
 
 	if (image_mode >= 0) {
-		/* Valid image mode. Search the mctl node first.
-		 * If mctl node doesnt have the instance, then
-		 * search in the user's video node */
 		if (pcam->mctl_node.dev_inst_map[image_mode]
 		&& is_buf_in_queue(pcam, fbuf, image_mode)) {
 			idx =
@@ -175,7 +191,7 @@ static struct msm_cam_v4l2_dev_inst *msm_mctl_get_pcam_inst_for_divert(
 			pr_err("%s Invalid image mode %d. Return NULL\n",
 				   __func__, image_mode);
 	}
-	return pcam_inst;
+		return pcam_inst;
 }
 
 int msm_mctl_do_pp_divert(
@@ -185,13 +201,14 @@ int msm_mctl_do_pp_divert(
 {
 	struct msm_cam_v4l2_dev_inst *pcam_inst;
 	int rc = 0, i, buf_idx;
-	int del_buf = 0; /* delete from free queue */
+	int del_buf = 0; 
 	struct msm_cam_evt_divert_frame div;
 	struct msm_frame_buffer *vb = NULL;
 	struct videobuf2_contig_pmem *mem;
 	int node;
 
-	pcam_inst = msm_mctl_get_pcam_inst_for_divert(p_mctl, image_mode, fbuf, &node);
+	pcam_inst = msm_mctl_get_pcam_inst_for_divert
+		(p_mctl, image_mode, fbuf, &node);
 	if (!pcam_inst) {
 		pr_err("%s Invalid instance. Cannot divert frame.\n",
 			__func__);
@@ -218,15 +235,12 @@ int msm_mctl_do_pp_divert(
 	msm_mctl_gettimeofday(&div.frame.timestamp);
 	vb->vidbuf.v4l2_buf.timestamp = div.frame.timestamp;
 	div.do_pp = pp_type;
-	/* Get the cookie for 1st plane and store the path.
-	 * Also use this to check the number of planes in
-	 * this buffer.*/
+	D("%s Diverting frame %x id %d to userspace ", __func__,
+		(int)div.frame.handle, div.frame.frame_id);
 	mem = vb2_plane_cookie(&vb->vidbuf, 0);
 	div.frame.path = mem->path;
 	div.frame.node_type = node;
 	if (mem->buffer_type == VIDEOBUF2_SINGLE_PLANE) {
-		/* This buffer contains only 1 plane. Use the
-		 * single planar structure to store the info.*/
 		div.frame.num_planes	= 1;
 		div.frame.sp.phy_addr	=
 			videobuf2_to_pmem_contig(&vb->vidbuf, 0);
@@ -239,11 +253,7 @@ int msm_mctl_do_pp_divert(
 			p_mctl->pp_info.div_frame[pcam_inst->image_mode].
 			ch_paddr[0] = div.frame.sp.phy_addr;
 	} else {
-		/* This buffer contains multiple planes. Use the mutliplanar
-		 * structure to store the info. */
 		div.frame.num_planes	= pcam_inst->plane_info.num_planes;
-		/* Now traverse through all the planes of the buffer to
-		 * fill out the plane info. */
 		for (i = 0; i < div.frame.num_planes; i++) {
 			mem = vb2_plane_cookie(&vb->vidbuf, i);
 			div.frame.mp[i].phy_addr =
@@ -260,7 +270,8 @@ int msm_mctl_do_pp_divert(
 		}
 		if (!pp_type)
 			p_mctl->pp_info.div_frame[pcam_inst->image_mode].
-			ch_paddr[0] = div.frame.mp[0].phy_addr;
+			ch_paddr[0] = div.frame.mp[0].phy_addr +
+					div.frame.mp[0].data_offset;
 	}
 	rc = msm_mctl_pp_buf_divert(p_mctl, pcam_inst, &div);
 	return rc;
@@ -282,9 +293,6 @@ static int msm_mctl_pp_get_phy_addr(
 	pp_frame->frame_id = vb->vidbuf.v4l2_buf.sequence;
 	pp_frame->timestamp = vb->vidbuf.v4l2_buf.timestamp;
 	pp_frame->buf_idx = buf_idx;
-	/* Get the cookie for 1st plane and store the path.
-	 * Also use this to check the number of planes in
-	 * this buffer.*/
 	mem = vb2_plane_cookie(&vb->vidbuf, 0);
 	pp_frame->image_type = (unsigned short)mem->path;
 	if (mem->buffer_type == VIDEOBUF2_SINGLE_PLANE) {
@@ -336,12 +344,10 @@ static int msm_mctl_pp_copy_timestamp_and_frame_id(
 	return 0;
 }
 
-static struct msm_cam_v4l2_dev_inst *msm_mctl_pp_path_to_pcam_inst(struct msm_cam_v4l2_device *pcam,
+static int msm_mctl_pp_path_to_inst_index(struct msm_cam_v4l2_device *pcam,
 					int out_type)
 {
 	int image_mode;
-	int idx;
-
 	switch (out_type) {
 	case OUTPUT_TYPE_P:
 		image_mode = MSM_V4L2_EXT_CAPTURE_MODE_PREVIEW;
@@ -356,40 +362,36 @@ static struct msm_cam_v4l2_dev_inst *msm_mctl_pp_path_to_pcam_inst(struct msm_ca
 		image_mode = -1;
 		break;
 	}
-	if ((image_mode >= 0) && pcam->mctl_node.dev_inst_map[image_mode]) {
-		idx = pcam->mctl_node.dev_inst_map[image_mode]->my_index;
-		return pcam->mctl_node.dev_inst[idx];
-	} else if ((image_mode >= 0) && pcam->dev_inst_map[image_mode]) {
-		idx = pcam->dev_inst_map[image_mode]->my_index;
-		return pcam->dev_inst[idx];
-	} else
-		return NULL;
+	if ((image_mode >= 0) && pcam->dev_inst_map[image_mode])
+		return pcam->dev_inst_map[image_mode]->my_index;
+	else
+		return -EINVAL;
 }
 
 int msm_mctl_pp_proc_vpe_cmd(
 	struct msm_cam_media_controller *p_mctl,
 	struct msm_mctl_pp_cmd *pp_cmd)
 {
-	int rc = 0;
+	int rc = 0, idx;
 	void __user *argp = (void __user *)pp_cmd->value;
 	struct msm_cam_v4l2_dev_inst *pcam_inst;
 
 	switch (pp_cmd->id) {
 	case VPE_CMD_INIT:
 	case VPE_CMD_DEINIT:
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		break;
 	case VPE_CMD_DISABLE:
 	case VPE_CMD_RESET:
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		break;
 	case VPE_CMD_ENABLE: {
 		struct msm_vpe_clock_rate clk_rate;
 		if (sizeof(struct msm_vpe_clock_rate) !=
 			pp_cmd->length) {
-			D("%s: vpe cmd size mismatch "
+			pr_err("%s: vpe cmd size mismatch "
 				"(id=%d, length = %d, expect size = %d",
 				__func__, pp_cmd->id, pp_cmd->length,
 				sizeof(struct msm_vpe_clock_rate));
@@ -398,12 +400,12 @@ int msm_mctl_pp_proc_vpe_cmd(
 		}
 		if (copy_from_user(&clk_rate, pp_cmd->value,
 			sizeof(struct msm_vpe_clock_rate))) {
-			D("%s:clk_rate copy failed", __func__);
+			pr_err("%s:clk_rate copy failed", __func__);
 			return -EFAULT;
 		}
 		pp_cmd->value = (void *)&clk_rate;
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		pp_cmd->value = argp;
 		break;
 	}
@@ -421,8 +423,8 @@ int msm_mctl_pp_proc_vpe_cmd(
 			&flush_buf, pp_cmd->value, sizeof(flush_buf)))
 			return -EFAULT;
 		pp_cmd->value = (void *)&flush_buf;
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		if (rc == 0) {
 			if (copy_to_user((void *)argp,
 						&flush_buf,
@@ -449,8 +451,8 @@ int msm_mctl_pp_proc_vpe_cmd(
 			sizeof(op_mode_cfg)))
 			return -EFAULT;
 		pp_cmd->value = (void *)&op_mode_cfg;
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		break;
 	}
 	case VPE_CMD_INPUT_PLANE_CFG: {
@@ -467,8 +469,8 @@ int msm_mctl_pp_proc_vpe_cmd(
 			&input_cfg, pp_cmd->value, sizeof(input_cfg)))
 			return -EFAULT;
 		pp_cmd->value = (void *)&input_cfg;
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		break;
 	}
 	case VPE_CMD_OUTPUT_PLANE_CFG: {
@@ -488,8 +490,8 @@ int msm_mctl_pp_proc_vpe_cmd(
 			return -EFAULT;
 		}
 		pp_cmd->value = (void *)&output_cfg;
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		break;
 	}
 	case VPE_CMD_INPUT_PLANE_UPDATE: {
@@ -506,8 +508,8 @@ int msm_mctl_pp_proc_vpe_cmd(
 			sizeof(input_update_cfg)))
 			return -EFAULT;
 		pp_cmd->value = (void *)&input_update_cfg;
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		break;
 	}
 	case VPE_CMD_SCALE_CFG_TYPE: {
@@ -524,8 +526,8 @@ int msm_mctl_pp_proc_vpe_cmd(
 			sizeof(scaler_cfg)))
 			return -EFAULT;
 		pp_cmd->value = (void *)&scaler_cfg;
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, NULL);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, NULL);
 		break;
 	}
 	case VPE_CMD_ZOOM: {
@@ -549,46 +551,31 @@ int msm_mctl_pp_proc_vpe_cmd(
 			kfree(zoom);
 			return -EFAULT;
 		}
-		D("%s: src=0x%x,dest=0x%x,cookie=0x%x,action=0x%x,src_path=0x%x,dest_path=0x%x",
+		D("%s: src=0x%x, dest=0x%x,cookie=0x%x,action=0x%x,path=0x%x",
 				__func__, zoom->pp_frame_cmd.src_buf_handle,
 				zoom->pp_frame_cmd.dest_buf_handle,
 				zoom->pp_frame_cmd.cookie,
 				zoom->pp_frame_cmd.vpe_output_action,
-				zoom->pp_frame_cmd.src_path,
-				zoom->pp_frame_cmd.dest_path);
-		pcam_inst = msm_mctl_pp_path_to_pcam_inst(p_mctl->sync.pcam_sync,
-			zoom->pp_frame_cmd.src_path);
+				zoom->pp_frame_cmd.path);
+		idx = msm_mctl_pp_path_to_inst_index(p_mctl->pcam_ptr,
+			zoom->pp_frame_cmd.path);
+		if (idx < 0) {
+			pr_err("%s Invalid path, returning\n", __func__);
+			kfree(zoom);
+			return idx;
+		}
+		pcam_inst = p_mctl->pcam_ptr->dev_inst[idx];
 		if (!pcam_inst) {
 			pr_err("%s Invalid instance, returning\n", __func__);
 			kfree(zoom);
 			return -EINVAL;
 		}
 		zoom->user_cmd = pp_cmd->id;
-
-		if (!zoom->pp_frame_cmd.src_buf_handle) {
-			pr_err("%s zoom->pp_frame_cmd.src_buf_handle == NULL\n", __func__);
-			kfree(zoom);
-			return -EINVAL;
-		}
 		rc = msm_mctl_pp_get_phy_addr(pcam_inst,
 			zoom->pp_frame_cmd.src_buf_handle, &zoom->src_frame);
 		if (rc) {
 			kfree(zoom);
 			break;
-		}
-
-        pcam_inst = msm_mctl_pp_path_to_pcam_inst(p_mctl->sync.pcam_sync,
-            zoom->pp_frame_cmd.dest_path);
-        if (!pcam_inst) {
-            pr_err("%s Invalid instance, returning\n", __func__);
-            kfree(zoom);
-            return -EINVAL;
-        }
-
-		if (!zoom->pp_frame_cmd.dest_buf_handle) {
-			pr_err("%s zoom->pp_frame_cmd.dest_buf_handle == NULL\n", __func__);
-			kfree(zoom);
-			return -EINVAL;
 		}
 		rc = msm_mctl_pp_get_phy_addr(pcam_inst,
 			zoom->pp_frame_cmd.dest_buf_handle, &zoom->dest_frame);
@@ -604,8 +591,8 @@ int msm_mctl_pp_proc_vpe_cmd(
 			kfree(zoom);
 			break;
 		}
-		rc = msm_isp_subdev_ioctl_vpe(
-			p_mctl->isp_sdev->sd_vpe, pp_cmd, (void *)zoom);
+		rc = msm_mctl_pp_vpe_ioctl(
+			p_mctl->vpe_sdev, pp_cmd, (void *)zoom);
 		if (rc) {
 			kfree(zoom);
 			break;
@@ -683,7 +670,7 @@ int msm_mctl_pp_proc_cmd(struct msm_cam_media_controller *p_mctl,
 		if (copy_from_user(&divert_pp, pp_cmd->value,
 				sizeof(divert_pp)))
 			return -EFAULT;
-		pr_info("%s: PP_PATH, path=%d",
+		D("%s: PP_PATH, path=%d",
 			__func__, divert_pp.path);
 		spin_lock_irqsave(&p_mctl->pp_info.lock, flags);
 		if (divert_pp.enable)
@@ -725,7 +712,7 @@ int msm_mctl_pp_ioctl(struct msm_cam_media_controller *p_mctl,
 		break;
 	}
 	if (!rc) {
-		/* deep copy back the return value */
+		
 		if (copy_to_user((void *)arg,
 			&pp_cmd,
 			sizeof(struct msm_mctl_post_proc_cmd))) {
@@ -749,7 +736,7 @@ int msm_mctl_pp_notify(struct msm_cam_media_controller *p_mctl,
 			struct msm_free_buf done_frame;
 			int img_mode =
 				msm_mctl_pp_path_to_img_mode(
-					pp_frame_cmd->dest_path);
+					pp_frame_cmd->path);
 			if (img_mode < 0) {
 				pr_err("%s Invalid image mode\n", __func__);
 				return img_mode;
@@ -762,7 +749,7 @@ int msm_mctl_pp_notify(struct msm_cam_media_controller *p_mctl,
 				p_mctl, img_mode, &done_frame, 0, 0);
 			D("%s: vpe done to app, vb=0x%x, path=%d, phy=0x%x",
 				__func__, done_frame.vb,
-				pp_frame_cmd->dest_path, done_frame.ch_paddr[0]);
+				pp_frame_cmd->path, done_frame.ch_paddr[0]);
 		}
 		if ((MSM_MCTL_PP_VPE_FRAME_ACK &
 			pp_frame_cmd->vpe_output_action)) {
@@ -778,7 +765,7 @@ int msm_mctl_pp_notify(struct msm_cam_media_controller *p_mctl,
 			memset(&v4l2_evt, 0, sizeof(v4l2_evt));
 			*((uint32_t *)v4l2_evt.u.data) = (uint32_t)isp_event;
 
-			/* Get hold of pp event info struct inside event ctrl.*/
+			
 			pp_event_info = &(isp_event->isp_data.pp_event_info);
 
 			pp_event_info->event = MCTL_PP_EVENT_CMD_ACK;
@@ -796,7 +783,7 @@ int msm_mctl_pp_notify(struct msm_cam_media_controller *p_mctl,
 				__func__, pp_frame_info->pp_frame_cmd.cookie,
 				v4l2_evt.type);
 		}
-		kfree(pp_frame_info); /* free mem */
+		kfree(pp_frame_info); 
 		return 0;
 }
 
@@ -819,8 +806,8 @@ int msm_mctl_pp_reserve_free_frame(
 		pr_err("%s Invalid image mode %d", __func__, image_mode);
 		return -EINVAL;
 	}
-	/* Always reserve the buffer from user's video node */
-	pcam_inst = p_mctl->sync.pcam_sync->dev_inst[image_mode];
+	
+	pcam_inst = p_mctl->pcam_ptr->dev_inst[image_mode];
 	if (!pcam_inst) {
 		pr_err("%s Instance already closed ", __func__);
 		return -EINVAL;
@@ -879,46 +866,7 @@ int msm_mctl_pp_release_free_frame(
 
 	return rc;
 }
-//HTC_START chris 20120305
-int msm_mctl_pp_return_free_frame(
-	struct msm_cam_media_controller *p_mctl,
-	void __user *arg)
-{
-	struct msm_cam_evt_divert_frame div_frame;
-	struct msm_cam_v4l2_dev_inst *pcam_inst;
-	struct msm_pp_frame *frame;
-	int image_mode, rc = 0;
-	struct msm_free_buf free_buf;
 
-	if (copy_from_user(&div_frame, arg,
-		sizeof(struct msm_cam_evt_divert_frame)))
-		return -EFAULT;
-
-	image_mode = div_frame.image_mode;
-	if (image_mode < 0) {
-		pr_err("%s Invalid image mode %d\n", __func__, image_mode);
-		return -EINVAL;
-	}
-	frame = &div_frame.frame;
-	if (frame->num_planes > 1)
-		free_buf.ch_paddr[0] = frame->mp[0].phy_addr;
-	else
-		free_buf.ch_paddr[0] = frame->sp.phy_addr;
-
-	pcam_inst = msm_mctl_get_pcam_inst(p_mctl, image_mode);
-	if (!pcam_inst) {
-		pr_err("%s Invalid instance. Cannot release frame.\n",
-			__func__);
-		return -EINVAL;
-	}
-	D("%s phy = 0x%x\n", __func__, free_buf.ch_paddr[0]);
-	rc = msm_mctl_return_free_buf(p_mctl, image_mode, &free_buf);
-	pr_info("%s: return free buf, rc = %d, phy = 0x%x",
-		__func__, rc, free_buf.ch_paddr[0]);
-
-	return rc;
-}
-//HTC_END chris 20120305
 int msm_mctl_set_pp_key(struct msm_cam_media_controller *p_mctl,
 				void __user *arg)
 {
@@ -954,6 +902,8 @@ int msm_mctl_pp_done(
 		pr_err("%s Invalid image mode\n", __func__);
 		return image_mode;
 	}
+	D("%s Returning frame %x id %d to kernel ", __func__,
+		(int)frame.handle, frame.frame_id);
 	if (p_mctl->pp_info.div_frame[image_mode].ch_paddr[0]) {
 		memcpy(&buf,
 			&p_mctl->pp_info.div_frame[image_mode],
@@ -962,17 +912,18 @@ int msm_mctl_pp_done(
 			0, sizeof(buf));
 		if (p_mctl->pp_info.cur_frame_id[image_mode] !=
 					frame.frame_id) {
-			/* dirty frame. should not pass to app */
+			
 			dirty = 1;
 		}
 	} else {
 		if (frame.num_planes > 1)
-			buf.ch_paddr[0] = frame.mp[0].phy_addr;
+			buf.ch_paddr[0] = frame.mp[0].phy_addr +
+						frame.mp[0].data_offset;
 		else
-			buf.ch_paddr[0] = frame.sp.phy_addr;
+			buf.ch_paddr[0] = frame.sp.phy_addr + frame.sp.y_off;
 	}
 	spin_unlock_irqrestore(&p_mctl->pp_info.lock, flags);
-	/* here buf.addr is phy_addr */
+	
 	rc = msm_mctl_buf_done_pp(p_mctl, image_mode, &buf, dirty, 0);
 	return rc;
 }
@@ -1007,19 +958,24 @@ int msm_mctl_pp_divert_done(
 		image_mode = MSM_V4L2_EXT_CAPTURE_MODE_VIDEO;
 		break;
 	case OUTPUT_TYPE_T:
+		msg_type = VFE_MSG_OUTPUT_T;
+		image_mode = MSM_V4L2_EXT_CAPTURE_MODE_THUMBNAIL;
+		break;
 	default:
 		rc = -EFAULT;
 		goto err;
 	}
 
 	if (frame.num_planes > 1)
-		buf.ch_paddr[0] = frame.mp[0].phy_addr;
+		buf.ch_paddr[0] = frame.mp[0].phy_addr +
+					frame.mp[0].data_offset;
 	else
-		buf.ch_paddr[0] = frame.sp.phy_addr;
+		buf.ch_paddr[0] = frame.sp.phy_addr + frame.sp.y_off;
 
 	spin_unlock_irqrestore(&p_mctl->pp_info.lock, flags);
 	D("%s Frame done id: %d\n", __func__, frame.frame_id);
-	rc = msm_mctl_buf_done_pp(p_mctl, image_mode, &buf, dirty, frame.node_type);
+	rc = msm_mctl_buf_done_pp(p_mctl, image_mode,
+		&buf, dirty, frame.node_type);
 	return rc;
 err:
 	spin_unlock_irqrestore(&p_mctl->pp_info.lock, flags);
@@ -1046,8 +1002,8 @@ int msm_mctl_pp_mctl_divert_done(
 	}
 	image_mode = div_frame.image_mode;
 	buf = (struct msm_frame_buffer *)div_frame.frame.handle;
-	D("%s Returning buffer %x idx %d Image mode %d ", __func__,
-		(int)buf, div_frame.frame.buf_idx, image_mode);
+	D("%s Returning buffer %x Image mode %d ", __func__,
+		(int)buf, image_mode);
 	rc = msm_mctl_buf_return_buf(p_mctl, image_mode, buf);
 	if (rc < 0)
 		pr_err("%s Error returning mctl buffer ", __func__);

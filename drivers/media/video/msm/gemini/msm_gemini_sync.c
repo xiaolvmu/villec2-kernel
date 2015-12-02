@@ -23,7 +23,6 @@
 
 static int release_buf;
 
-/*************** queue helper ****************/
 inline void msm_gemini_q_init(char const *name, struct msm_gemini_q *q_p)
 {
 	GMN_DBG("%s:%d] %s\n", __func__, __LINE__, name);
@@ -102,7 +101,7 @@ inline int msm_gemini_q_in_buf(struct msm_gemini_q *q_p,
 
 inline int msm_gemini_q_wait(struct msm_gemini_q *q_p)
 {
-	int tm = MAX_SCHEDULE_TIMEOUT; /* 500ms */
+	int tm = MAX_SCHEDULE_TIMEOUT; 
 	int rc;
 
 	GMN_DBG("%s:%d] %s wait\n", __func__, __LINE__, q_p->name);
@@ -173,7 +172,6 @@ inline void msm_gemini_q_cleanup(struct msm_gemini_q *q_p)
 	q_p->unblck = 0;
 }
 
-/*************** event queue ****************/
 
 int msm_gemini_framedone_irq(struct msm_gemini_device *pgmn_dev,
 	struct msm_gemini_core_buf *buf_in)
@@ -221,9 +219,6 @@ int msm_gemini_evt_get(struct msm_gemini_device *pgmn_dev,
 	ctrl_cmd.type = buf_p->vbuf.type;
 	kfree(buf_p);
 
-	GMN_DBG("%s:%d] 0x%08x %d\n", __func__, __LINE__,
-		(int) ctrl_cmd.value, ctrl_cmd.len);
-
 	if (copy_to_user(to, &ctrl_cmd, sizeof(ctrl_cmd))) {
 		GMN_PR_ERR("%s:%d]\n", __func__, __LINE__);
 		return -EFAULT;
@@ -263,7 +258,6 @@ void msm_gemini_err_irq(struct msm_gemini_device *pgmn_dev,
 	return;
 }
 
-/*************** output queue ****************/
 
 int msm_gemini_we_pingpong_irq(struct msm_gemini_device *pgmn_dev,
 	struct msm_gemini_core_buf *buf_in)
@@ -288,7 +282,8 @@ int msm_gemini_we_pingpong_irq(struct msm_gemini_device *pgmn_dev,
 		rc = msm_gemini_core_we_buf_update(buf_out);
 		kfree(buf_out);
 	} else {
-		msm_gemini_core_we_buf_reset(buf_in);
+		if (buf_in)
+			msm_gemini_core_we_buf_reset(buf_in);
 		GMN_DBG("%s:%d] no output buffer\n", __func__, __LINE__);
 		rc = -2;
 	}
@@ -372,7 +367,6 @@ int msm_gemini_output_buf_enqueue(struct msm_gemini_device *pgmn_dev,
 	return 0;
 }
 
-/*************** input queue ****************/
 
 int msm_gemini_fe_pingpong_irq(struct msm_gemini_device *pgmn_dev,
 	struct msm_gemini_core_buf *buf_in)
@@ -424,7 +418,10 @@ int msm_gemini_input_get(struct msm_gemini_device *pgmn_dev, void __user * to)
 	}
 
 	buf_cmd = buf_p->vbuf;
-	msm_gemini_platform_p2v(buf_p->file, &buf_p->handle);
+	if (pgmn_dev->op_mode == MSM_GEMINI_MODE_OFFLINE_ENCODE ||
+		pgmn_dev->op_mode == MSM_GEMINI_MODE_OFFLINE_ROTATION) {
+		msm_gemini_platform_p2v(buf_p->file, &buf_p->handle);
+	}
 	kfree(buf_p);
 
 	GMN_DBG("%s:%d] 0x%08x %d\n", __func__, __LINE__,
@@ -450,6 +447,7 @@ int msm_gemini_input_buf_enqueue(struct msm_gemini_device *pgmn_dev,
 {
 	struct msm_gemini_core_buf *buf_p;
 	struct msm_gemini_buf buf_cmd;
+	int rc = 0;
 
 	if (copy_from_user(&buf_cmd, arg, sizeof(struct msm_gemini_buf))) {
 		GMN_PR_ERR("%s:%d] failed\n", __func__, __LINE__);
@@ -465,15 +463,32 @@ int msm_gemini_input_buf_enqueue(struct msm_gemini_device *pgmn_dev,
 	GMN_DBG("%s:%d] 0x%08x %d\n", __func__, __LINE__,
 		(int) buf_cmd.vaddr, buf_cmd.y_len);
 
+	if (pgmn_dev->op_mode == MSM_GEMINI_MODE_REALTIME_ENCODE) {
+		rc = msm_iommu_map_contig_buffer(
+			(unsigned long)buf_cmd.y_off, CAMERA_DOMAIN, GEN_POOL,
+			((buf_cmd.y_len + buf_cmd.cbcr_len + 4095) & (~4095)),
+			SZ_4K, IOMMU_WRITE | IOMMU_READ,
+			(unsigned long *)&buf_p->y_buffer_addr);
+		if (rc < 0) {
+			pr_err("%s iommu mapping failed with error %d\n",
+				 __func__, rc);
+			kfree(buf_p);
+			return rc;
+		}
+	} else {
 	buf_p->y_buffer_addr    = msm_gemini_platform_v2p(buf_cmd.fd,
 		buf_cmd.y_len + buf_cmd.cbcr_len, &buf_p->file,
 		&buf_p->handle)	+ buf_cmd.offset;
+	}
 	buf_p->y_len          = buf_cmd.y_len;
 
 	buf_p->cbcr_buffer_addr = buf_p->y_buffer_addr + buf_cmd.y_len;
 	buf_p->cbcr_len       = buf_cmd.cbcr_len;
 
 	buf_p->num_of_mcu_rows = buf_cmd.num_of_mcu_rows;
+	GMN_DBG("%s: y_addr=%x,y_len=%x,cbcr_addr=%x,cbcr_len=%x\n", __func__,
+		buf_p->y_buffer_addr, buf_p->y_len, buf_p->cbcr_buffer_addr,
+		buf_p->cbcr_len);
 
 	if (!buf_p->y_buffer_addr || !buf_p->cbcr_buffer_addr) {
 		GMN_PR_ERR("%s:%d] v2p wrong\n", __func__, __LINE__);
@@ -525,7 +540,7 @@ int __msm_gemini_open(struct msm_gemini_device *pgmn_dev)
 
 	mutex_lock(&pgmn_dev->lock);
 	if (pgmn_dev->open_count) {
-		/* only open once */
+		
 		GMN_PR_ERR("%s:%d] busy\n", __func__, __LINE__);
 		mutex_unlock(&pgmn_dev->lock);
 		return -EBUSY;
@@ -682,12 +697,12 @@ int msm_gemini_start(struct msm_gemini_device *pgmn_dev, void * __user arg)
 		if (buf_out_free[i]) {
 			msm_gemini_core_we_buf_update(buf_out_free[i]);
 		} else if (i == 1) {
-			/* set the pong to same address as ping */
+			
 			buf_out_free[0]->y_len >>= 1;
 			buf_out_free[0]->y_buffer_addr +=
 				buf_out_free[0]->y_len;
 			msm_gemini_core_we_buf_update(buf_out_free[0]);
-			/* since ping and pong are same buf release only once*/
+			
 			release_buf = 0;
 		} else {
 			GMN_DBG("%s:%d] no output buffer\n",

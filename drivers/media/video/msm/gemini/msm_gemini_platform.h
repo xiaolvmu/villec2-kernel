@@ -16,6 +16,8 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/ion.h>
+#include <linux/iommu.h>
+
 void msm_gemini_platform_p2v(struct file  *file,
 				struct ion_handle **ionhandle);
 uint32_t msm_gemini_platform_v2p(int fd, uint32_t len, struct file **file,
@@ -33,4 +35,4 @@ int msm_gemini_platform_init(struct platform_device *pdev,
 int msm_gemini_platform_release(struct resource *mem, void *base, int irq,
 	void *context);
 
-#endif /* MSM_GEMINI_PLATFORM_H */
+#endif 

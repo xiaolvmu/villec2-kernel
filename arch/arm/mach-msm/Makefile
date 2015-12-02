@@ -226,6 +226,9 @@ ifdef CONFIG_BT
 	obj-$(CONFIG_MACH_MONARUDO) += board-monarudo-rfkill.o  htc_bdaddress.o
 endif
 
+#ifdef CONFIG_MSM_CAMERA_V4L2
+#	obj-$(CONFIG_ARCH_MSM8X60) += board-msm8x60-camera.o
+#endif
 obj-$(CONFIG_ARCH_FSM9XXX) += devices-fsm9xxx.o
 obj-$(CONFIG_ARCH_FSM9XXX) += clock-fsm9xxx.o clock-local.o acpuclock-fsm9xxx.o
 obj-$(CONFIG_ARCH_FSM9XXX) += dfe-fsm9xxx.o rfic-fsm9xxx.o
@@ -346,9 +349,9 @@ obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
 
-obj-$(CONFIG_MACH_VILLEC2) += board-villec2.o devices_htc.o 
+obj-$(CONFIG_MACH_VILLEC2) += board-villec2.o devices_htc.o
 obj-$(CONFIG_MACH_VILLEC2) += board-villec2-keypad.o board-villec2-gpiomux.o
-obj-$(CONFIG_MACH_VILLEC2) += htc_awb_cal.o
+obj-$(CONFIG_MACH_VILLEC2) += board-villec2-camera.o htc_awb_cal.o
 obj-$(CONFIG_MACH_VILLEC2) += htc_bdaddress.o board-villec2-rfkill.o
 # Broadcom 
 obj-$(CONFIG_MACH_VILLEC2) += board-villec2-mmc.o board-villec2-wifi.o htc_wifi_nvs.o 

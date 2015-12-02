@@ -36,4 +36,4 @@ enum GEMINI_ROTATION {
 	GEMINI_ROTATION_270
 };
 
-#endif /* MSM_GEMINI_COMMON_H */
+#endif 
