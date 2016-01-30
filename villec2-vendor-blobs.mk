@@ -124,5 +124,4 @@ PRODUCT_COPY_FILES += \
   vendor/htc-extra/villec2/legacy/libOmxVenc.so:system/lib/libOmxVenc.so                \
   vendor/htc-extra/villec2/legacy/liboverlay.so:system/lib/liboverlay.so               \
   vendor/htc-extra/villec2/legacy/libqdutils.so:system/lib/libqdutils.so                  \
-  vendor/htc-extra/villec2/legacy/libselinux.so:system/lib/libselinux.so                  \
-  vendor/htc-extra/villec2/legacy/libstagefrighthw.so:system/lib/libstagefrighthw.so      
+  vendor/htc-extra/villec2/legacy/libselinux.so:system/lib/libselinux.so
