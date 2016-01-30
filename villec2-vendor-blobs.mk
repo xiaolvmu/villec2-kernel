@@ -46,7 +46,7 @@ PRODUCT_COPY_FILES += \
   vendor/htc-extra/villec2/proprietary/lib/libgemini.so:system/lib/libgemini.so \
   vendor/htc-extra/villec2/proprietary/lib/libmmcamera_frameproc.so:system/lib/libmmcamera_frameproc.so \
   vendor/htc-extra/villec2/proprietary/lib/libmmcamera_rawchipproc.so:system/lib/libmmcamera_rawchipproc.so \
-  vendor/htc-extra/villec2/proprietary/lib/libmmcamera_statsproc30.so:system/lib/libmmcamera_statsproc30.so \
+  vendor/htc-extra/villec2/proprietary/lib/libmmcamera_statsproc31.so:system/lib/libmmcamera_statsproc31.so \
   vendor/htc-extra/villec2/proprietary/lib/libmmipl.so:system/lib/libmmipl.so \
   vendor/htc-extra/villec2/proprietary/lib/libmmjpeg.so:system/lib/libmmjpeg.so \
   vendor/htc-extra/villec2/proprietary/lib/libmmmpo.so:system/lib/libmmmpo.so \
@@ -82,7 +82,9 @@ PRODUCT_COPY_FILES += \
   vendor/htc-extra/villec2/proprietary/etc/firmware/vidc.mdt:system/etc/firmware/vidc.mdt \
   vendor/htc-extra/villec2/proprietary/lib/egl/eglsubAndroid.so:system/lib/egl/eglsubAndroid.so \
   vendor/htc-extra/villec2/proprietary/lib/egl/libEGL_adreno200.so:system/lib/egl/libEGL_adreno200.so \
+  vendor/htc-extra/villec2/proprietary/lib/egl/libGLES_android.so:system/lib/egl/libGLES_android.so \
   vendor/htc-extra/villec2/proprietary/lib/egl/libGLESv1_CM_adreno200.so:system/lib/egl/libGLESv1_CM_adreno200.so \
+  vendor/htc-extra/villec2/proprietary/lib/egl/libGLESv2S3D_adreno200.so:system/lib/egl/libGLESv2S3D_adreno200.so \
   vendor/htc-extra/villec2/proprietary/lib/egl/libGLESv2_adreno200.so:system/lib/egl/libGLESv2_adreno200.so \
   vendor/htc-extra/villec2/proprietary/lib/egl/libq3dtools_adreno200.so:system/lib/egl/libq3dtools_adreno200.so \
   vendor/htc-extra/villec2/proprietary/lib/libC2D2.so:system/lib/libC2D2.so \
