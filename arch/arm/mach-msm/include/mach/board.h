@@ -506,6 +506,8 @@ struct msm_panel_common_pdata {
 	u32 ov1_wb_size;  
 	u32 mem_hid;
 	char cont_splash_enabled;
+	u32 splash_screen_addr;
+	u32 splash_screen_size;
 	char mdp_iommu_split_domain;
 	int (*mdp_color_enhance)(void);
 	int (*mdp_gamma)(void);
@@ -568,6 +570,7 @@ struct mipi_dsi_panel_platform_data {
 	void (*dsi_pwm_cfg)(void);
 	char enable_wled_bl_ctrl;
 	unsigned char (*shrink_pwm)(int val);
+	void (*gpio_set_backlight)(int bl_level);
 };
 
 struct lvds_panel_platform_data {
@@ -582,17 +585,11 @@ struct msm_wfd_platform_data {
 struct msm_fb_platform_data {
 	int (*detect_client)(const char *name);
 	int mddi_prescan;
+	unsigned char ext_resolution;
 	int (*allow_set_offset)(void);
 	char prim_panel_name[PANEL_NAME_MAX_LEN];
 	char ext_panel_name[PANEL_NAME_MAX_LEN];
 };
-
-#define HDMI_VFRMT_640x480p60_4_3 0
-#define HDMI_VFRMT_720x480p60_16_9 2
-#define HDMI_VFRMT_1280x720p60_16_9 3
-#define HDMI_VFRMT_720x576p50_16_9 17
-#define HDMI_VFRMT_1920x1080p24_16_9 31
-#define HDMI_VFRMT_1920x1080p30_16_9 33
 
 typedef struct
 {

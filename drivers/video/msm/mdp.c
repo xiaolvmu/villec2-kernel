@@ -363,6 +363,8 @@ static int mdp_hist_lut_block2mgmt(uint32_t block,
 	return ret;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wframe-larger-than="
 static int mdp_hist_lut_write_off(struct mdp_hist_lut_data *data,
 		struct mdp_hist_lut_info *info, uint32_t offset)
 {
@@ -394,6 +396,7 @@ static int mdp_hist_lut_write_off(struct mdp_hist_lut_data *data,
 
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 static int mdp_hist_lut_write(struct mdp_hist_lut_data *data,
 						struct mdp_hist_lut_info *info)
