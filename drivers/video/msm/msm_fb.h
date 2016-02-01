@@ -194,7 +194,43 @@ struct msm_fb_data_type {
 	u32 mdp_rev;
 	u32 writeback_state;
 	bool writeback_active_cnt;
+	bool writeback_initialized;
 	int cont_splash_done;
+	void *cpu_pm_hdl;
+	u32 acq_fen_cnt;
+	struct sync_fence *acq_fen[MDP_MAX_FENCE_FD];
+	struct sw_sync_timeline *timeline;
+	int timeline_value;
+	struct mutex sync_mutex;
+	struct mutex queue_mutex;
+	struct completion commit_comp;
+	u32 is_committing;
+	atomic_t commit_cnt;
+	struct task_struct *commit_thread;
+	wait_queue_head_t commit_queue;
+	int wake_commit_thread;
+	void *msm_fb_backup;
+	boolean panel_driver_on;
+	int vsync_sysfs_created;
+	void *copy_splash_buf;
+	unsigned char *copy_splash_phys;
+	uint32 sec_mapped;
+	uint32 sec_active;
+	uint32 max_map_size;
+#ifdef CONFIG_CABC_DIMMING_SWITCH
+	struct workqueue_struct *dimming_wq;
+	struct work_struct dimming_work;
+	struct timer_list dimming_update_timer;
+#endif
+#ifdef CONFIG_SRE_CONTROL
+	struct workqueue_struct *sre_wq;
+	struct work_struct sre_work;
+	struct timer_list sre_update_timer;
+#endif
+};
+struct msm_fb_backup_type {
+	struct fb_info info;
+	struct mdp_display_commit disp_commit;
 };
 
 struct dentry *msm_fb_get_debugfs_root(void);
@@ -220,8 +256,7 @@ void mdp_color_enhancement(const struct mdp_reg *reg_seq, int size);
 void msm_fb_config_backlight(struct msm_fb_data_type *mfd);
 #endif
 
-void fill_black_screen(void);
-void unfill_black_screen(void);
+void fill_black_screen(bool on, uint8 pipe_num, uint8 mixer_num);
 int msm_fb_check_frame_rate(struct msm_fb_data_type *mfd,
 				struct fb_info *info);
 

@@ -44,7 +44,7 @@ extern spinlock_t mdp_spin_lock;
 extern int mdp_rev;
 extern int mdp_iommu_split_domain;
 extern struct mdp_csc_cfg mdp_csc_convert[4];
-
+extern struct mdp_csc_cfg_data csc_cfg_matrix[];
 extern struct workqueue_struct *mdp_hist_wq;
 
 extern u32 mdp_ov0_blt_ctl;
@@ -799,6 +799,8 @@ void mdp_histogram_handle_isr(struct mdp_hist_mgmt *mgmt);
 void __mdp_histogram_kickoff(struct mdp_hist_mgmt *mgmt);
 void __mdp_histogram_reset(struct mdp_hist_mgmt *mgmt);
 void mdp_footswitch_ctrl(boolean on);
+int mdp_enable_iommu_clocks(void);
+int mdp_disable_iommu_clocks(void);
 
 #ifdef CONFIG_FB_MSM_MDP303
 static inline void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd)
@@ -832,6 +834,8 @@ int mdp_ppp_v4l2_overlay_clear(void);
 int mdp_ppp_v4l2_overlay_play(struct fb_info *info,
 	unsigned long srcp0_addr, unsigned long srcp0_size,
 	unsigned long srcp1_addr, unsigned long srcp1_size);
+
+u32 mdp_get_panel_framerate(struct msm_fb_data_type *mfd);
 
 #ifdef CONFIG_FB_MSM_DTV
 void mdp_vid_quant_set(void);

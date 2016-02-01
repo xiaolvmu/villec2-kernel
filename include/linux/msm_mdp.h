@@ -69,6 +69,8 @@
 #define MSMFB_WRITEBACK_TERMINATE _IO(MSMFB_IOCTL_MAGIC, 155)
 #define MSMFB_MDP_PP _IOWR(MSMFB_IOCTL_MAGIC, 156, struct msmfb_mdp_pp)
 #define MSMFB_OVERLAY_VSYNC_CTRL _IOW(MSMFB_IOCTL_MAGIC, 160, unsigned int)
+#define MSMFB_GET_USB_PROJECTOR_INFO _IOR(MSMFB_IOCTL_MAGIC, 301, struct msmfb_usb_projector_info)
+#define MSMFB_SET_USB_PROJECTOR_INFO _IOW(MSMFB_IOCTL_MAGIC, 302, struct msmfb_usb_projector_info)
 #define MSMFB_VSYNC_CTRL  _IOW(MSMFB_IOCTL_MAGIC, 161, unsigned int)
 #define MSMFB_BUFFER_SYNC  _IOW(MSMFB_IOCTL_MAGIC, 162, struct mdp_buf_sync)
 #define MSMFB_DISPLAY_COMMIT      _IOW(MSMFB_IOCTL_MAGIC, 164, \
@@ -80,6 +82,11 @@
 #define FB_TYPE_3D_PANEL 0x10101010
 #define MDP_IMGTYPE2_START 0x10000
 #define MSMFB_DRIVER_VERSION	0xF9E8D701
+
+struct msmfb_usb_projector_info {
+	int usb_offset;
+	int latest_offset;
+};
 
 enum {
 	NOTIFY_UPDATE_START,
@@ -359,6 +366,11 @@ enum {
 	BLEND_OP_MAX,
 };
 
+struct dpp_ctrl {
+	int8_t sharp_strength;
+	int8_t hsic_params[NUM_HSIC_PARAM];
+};
+
 struct mdp_overlay {
 	struct msmfb_img src;
 	struct mdp_rect src_rect;
@@ -372,6 +384,7 @@ struct mdp_overlay {
 	uint32_t id;
 	uint32_t user_data[8];
 	struct mdp_overlay_pp_params overlay_pp_cfg;
+	struct dpp_ctrl dpp;
 };
 
 struct msmfb_overlay_3d {
