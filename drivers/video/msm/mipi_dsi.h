@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,9 +23,9 @@
 
 #define BIT(x)  (1<<(x))
 
-#define MMSS_CC_BASE_PHY 0x04000000	
-#define MMSS_SFPB_BASE_PHY 0x05700000	
-#define MMSS_SERDES_BASE_PHY 0x04f01000 
+#define MMSS_CC_BASE_PHY 0x04000000	/* mmss clcok control */
+#define MMSS_SFPB_BASE_PHY 0x05700000	/* mmss SFPB CFG */
+#define MMSS_SERDES_BASE_PHY 0x04f01000 /* mmss (De)Serializer CFG */
 
 #define MIPI_DSI_BASE mipi_dsi_base
 
@@ -54,7 +54,7 @@
 #define MIPI_DSI_PANEL_720P_PT	8
 #define DSI_PANEL_MAX	8
 
-enum {		
+enum {		/* mipi dsi panel */
 	DSI_VIDEO_MODE,
 	DSI_CMD_MODE,
 };
@@ -117,13 +117,14 @@ enum dsi_trigger_type {
 #define DSI_INTR_CMD_DMA_DONE_MASK	BIT(1)
 #define DSI_INTR_CMD_DMA_DONE		BIT(0)
 
+#define DSI_VIDEO_TERM	BIT(16)
 #define DSI_MDP_TERM	BIT(8)
 #define DSI_CMD_TERM	BIT(0)
 
-#define DSI_CMD_TRIGGER_NONE		0x0	
+#define DSI_CMD_TRIGGER_NONE		0x0	/* mdp trigger */
 #define DSI_CMD_TRIGGER_TE		0x02
 #define DSI_CMD_TRIGGER_SW		0x04
-#define DSI_CMD_TRIGGER_SW_SEOF		0x05	
+#define DSI_CMD_TRIGGER_SW_SEOF		0x05	/* cmd dma only */
 #define DSI_CMD_TRIGGER_SW_TE		0x06
 
 extern struct device dsi_dev;
@@ -132,16 +133,16 @@ extern u32 dsi_irq;
 extern u32 esc_byte_ratio;
 
 extern void  __iomem *periph_base;
-extern char *mmss_cc_base;	
-extern char *mmss_sfpb_base;	
+extern char *mmss_cc_base;	/* mutimedia sub system clock control */
+extern char *mmss_sfpb_base;	/* mutimedia sub system sfpb */
 
 struct dsiphy_pll_divider_config {
 	u32 clk_rate;
 	u32 fb_divider;
 	u32 ref_divider_ratio;
-	u32 bit_clk_divider;	
-	u32 byte_clk_divider;	
-	u32 dsi_clk_divider;	
+	u32 bit_clk_divider;	/* oCLK1 */
+	u32 byte_clk_divider;	/* oCLK2 */
+	u32 dsi_clk_divider;	/* oCLK3 */
 };
 
 extern struct dsiphy_pll_divider_config pll_divider_config;
@@ -189,57 +190,62 @@ struct dsi_clk_desc {
 #define DSI_HDR_WC(wc)		((wc) & 0x0ffff)
 
 #define DSI_BUF_SIZE	64
-#define MIPI_DSI_MRPS	0x04	
+#define MIPI_DSI_MRPS	0x04	/* Maximum Return Packet Size */
 
-#define MIPI_DSI_LEN 8 
+#define MIPI_DSI_LEN 8 /* 4 x 4 - 6 - 2, bytes dcs header+crc-align  */
 
 struct dsi_buf {
-	uint32 *hdr;	
-	char *start;	
-	char *end;	
-	int size;	
-	char *data;	
-	int len;	
-	dma_addr_t dmap; 
+	uint32 *hdr;	/* dsi host header */
+	char *start;	/* buffer start addr */
+	char *end;	/* buffer end addr */
+	int size;	/* size of buffer */
+	char *data;	/* buffer */
+	int len;	/* data length */
+	dma_addr_t dmap; /* mapped dma addr */
 };
 
-#define DTYPE_DCS_WRITE		0x05	
-#define DTYPE_DCS_WRITE1	0x15	
-#define DTYPE_DCS_READ		0x06	
-#define DTYPE_DCS_LWRITE	0x39	
+/* dcs read/write */
+#define DTYPE_DCS_WRITE		0x05	/* short write, 0 parameter */
+#define DTYPE_DCS_WRITE1	0x15	/* short write, 1 parameter */
+#define DTYPE_DCS_READ		0x06	/* read */
+#define DTYPE_DCS_LWRITE	0x39	/* long write */
 
-#define DTYPE_GEN_WRITE		0x03	
-#define DTYPE_GEN_WRITE1	0x13	
-#define DTYPE_GEN_WRITE2	0x23	
-#define DTYPE_GEN_LWRITE	0x29	
-#define DTYPE_GEN_READ		0x04	
-#define DTYPE_GEN_READ1		0x14	
-#define DTYPE_GEN_READ2		0x24	
+/* generic read/write */
+#define DTYPE_GEN_WRITE		0x03	/* short write, 0 parameter */
+#define DTYPE_GEN_WRITE1	0x13	/* short write, 1 parameter */
+#define DTYPE_GEN_WRITE2	0x23	/* short write, 2 parameter */
+#define DTYPE_GEN_LWRITE	0x29	/* long write */
+#define DTYPE_GEN_READ		0x04	/* long read, 0 parameter */
+#define DTYPE_GEN_READ1		0x14	/* long read, 1 parameter */
+#define DTYPE_GEN_READ2		0x24	/* long read, 2 parameter */
 
-#define DTYPE_TEAR_ON		0x35	
-#define DTYPE_MAX_PKTSIZE	0x37	
-#define DTYPE_NULL_PKT		0x09	
-#define DTYPE_BLANK_PKT		0x19	
+#define DTYPE_TEAR_ON		0x35	/* set tear on */
+#define DTYPE_MAX_PKTSIZE	0x37	/* set max packet size */
+#define DTYPE_NULL_PKT		0x09	/* null packet, no data */
+#define DTYPE_BLANK_PKT		0x19	/* blankiing packet, no data */
 
-#define DTYPE_CM_ON		0x02	
-#define DTYPE_CM_OFF		0x12	
+#define DTYPE_CM_ON		0x02	/* color mode off */
+#define DTYPE_CM_OFF		0x12	/* color mode on */
 #define DTYPE_PERIPHERAL_OFF	0x22
 #define DTYPE_PERIPHERAL_ON	0x32
 
+/*
+ * dcs response
+ */
 #define DTYPE_ACK_ERR_RESP      0x02
-#define DTYPE_EOT_RESP          0x08    
-#define DTYPE_GEN_READ1_RESP    0x11    
-#define DTYPE_GEN_READ2_RESP    0x12    
+#define DTYPE_EOT_RESP          0x08    /* end of tx */
+#define DTYPE_GEN_READ1_RESP    0x11    /* 1 parameter, short */
+#define DTYPE_GEN_READ2_RESP    0x12    /* 2 parameter, short */
 #define DTYPE_GEN_LREAD_RESP    0x1a
 #define DTYPE_DCS_LREAD_RESP    0x1c
-#define DTYPE_DCS_READ1_RESP    0x21    
-#define DTYPE_DCS_READ2_RESP    0x22    
+#define DTYPE_DCS_READ1_RESP    0x21    /* 1 parameter, short */
+#define DTYPE_DCS_READ2_RESP    0x22    /* 2 parameter, short */
 
 struct dsi_cmd_desc {
 	int dtype;
 	int last;
 	int vc;
-	int ack;	
+	int ack;	/* ask ACK from peripheral */
 	int wait;
 	int dlen;
 	char *payload;
@@ -253,19 +259,22 @@ struct dsi_kickoff_action {
 	void *data;
 };
 
+
 #define CMD_REQ_MAX	4
 
 typedef void (*fxn)(u32 data);
 
 #define CMD_REQ_RX	0x0001
-#define CMD_REQ_COMMIT 0x0002
+#define CMD_REQ_COMMIT	0x0002
+#define CMD_CLK_CTRL	0x0004
 #define CMD_REQ_NO_MAX_PKT_SIZE 0x0008
+#define CMD_REQ_SINGLE_TX 0x0010
 
 struct dcs_cmd_req {
 	struct dsi_cmd_desc *cmds;
 	int cmds_cnt;
 	u32 flags;
-	int rlen;	
+	int rlen;	/* rx length */
 	fxn cb;
 };
 
@@ -285,6 +294,8 @@ void mipi_dsi_bist_ctrl(void);
 int mipi_dsi_buf_alloc(struct dsi_buf *, int size);
 int mipi_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm);
 int mipi_dsi_cmds_tx(struct dsi_buf *dp, struct dsi_cmd_desc *cmds, int cnt);
+int mipi_dsi_cmds_single_tx(struct dsi_buf *dp, struct dsi_cmd_desc *cmds,
+								int cnt);
 
 int mipi_dsi_cmd_dma_tx(struct dsi_buf *dp);
 int mipi_dsi_cmd_reg_tx(uint32 data);
@@ -304,8 +315,7 @@ void mipi_dsi_ack_err_status(void);
 void mipi_dsi_set_tear_on(struct msm_fb_data_type *mfd);
 void mipi_dsi_set_tear_off(struct msm_fb_data_type *mfd);
 void mipi_dsi_set_backlight(struct msm_fb_data_type *mfd, int level);
-void mipi_dsi_clk_enable(void);
-void mipi_dsi_clk_disable(void);
+void mipi_dsi_cmd_backlight_tx(struct dsi_buf *dp);
 void mipi_dsi_pre_kickoff_action(void);
 void mipi_dsi_post_kickoff_action(void);
 void mipi_dsi_pre_kickoff_add(struct dsi_kickoff_action *act);
@@ -319,30 +329,62 @@ void mipi_dsi_mdp_busy_wait(void);
 irqreturn_t mipi_dsi_isr(int irq, void *ptr);
 
 void mipi_set_tx_power_mode(int mode);
-void mipi_dsi_phy_ctrl(int on);
 void mipi_dsi_phy_init(int panel_ndx, struct msm_panel_info const *panel_info,
 	int target_type);
 int mipi_dsi_clk_div_config(uint8 bpp, uint8 lanes,
 			    uint32 *expected_dsi_pclk);
 int mipi_dsi_clk_init(struct platform_device *pdev);
 void mipi_dsi_clk_deinit(struct device *dev);
-void mipi_dsi_prepare_clocks(void);
+
+#ifdef CONFIG_FB_MSM_MIPI_DSI
+void mipi_dsi_clk_enable(void);
+void mipi_dsi_clk_disable(void);
 void mipi_dsi_unprepare_clocks(void);
+void mipi_dsi_prepare_ahb_clocks(void);
+void mipi_dsi_unprepare_ahb_clocks(void);
 void mipi_dsi_ahb_ctrl(u32 enable);
+void mipi_dsi_phy_ctrl(int on);
+#else
+static inline void mipi_dsi_clk_enable(void)
+{
+	/* empty */
+}
+void mipi_dsi_clk_disable(void)
+{
+	/* empty */
+}
+void mipi_dsi_prepare_clocks(void)
+{
+	/* empty */
+}
+void mipi_dsi_unprepare_clocks(void)
+{
+	/* empty */
+}
+void mipi_dsi_ahb_ctrl(u32 enable)
+{
+	/* empty */
+}
+void mipi_dsi_phy_ctrl(int on)
+{
+	/* empty */
+}
+#endif
+
 void cont_splash_clk_ctrl(int enable);
 void mipi_dsi_turn_on_clks(void);
 void mipi_dsi_turn_off_clks(void);
 void mipi_dsi_clk_cfg(int on);
-void mipi_dsi_clk_turn_on(struct msm_panel_info const *pinfo, int target_type);
-void mipi_dsi_clk_turn_off(void);
 
 int mipi_dsi_cmdlist_put(struct dcs_cmd_req *cmdreq);
 struct dcs_cmd_req *mipi_dsi_cmdlist_get(void);
 void mipi_dsi_cmdlist_commit(int from_mdp);
 void mipi_dsi_cmd_mdp_busy(void);
+void mipi_dsi_configure_fb_divider(u32 fps_level);
+void mipi_dsi_wait4video_done(void);
 
 #ifdef CONFIG_FB_MSM_MDP303
 void update_lane_config(struct msm_panel_info *pinfo);
 #endif
 
-#endif 
+#endif /* MIPI_DSI_H */
