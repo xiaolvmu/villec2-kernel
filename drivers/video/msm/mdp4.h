@@ -463,6 +463,7 @@ void mdp4_lcdc_update(struct msm_fb_data_type *mfd);
 void mdp4_intr_clear_set(ulong clear, ulong set);
 void mdp4_dma_p_cfg(void);
 unsigned is_mdp4_hw_reset(void);
+void mdp4_overlay_cfg_init(void);
 void mdp4_hw_init(void);
 void mdp4_isr_read(int);
 void mdp4_clear_lcdc(void);
@@ -794,6 +795,7 @@ void mdp4_dsi_cmd_dma_busy_check(void);
 
 
 #ifdef CONFIG_FB_MSM_MIPI_DSI
+void mdp_dsi_cmd_overlay_suspend(struct msm_fb_data_type *mfd);
 int mdp4_dsi_cmd_on(struct platform_device *pdev);
 int mdp4_dsi_cmd_off(struct platform_device *pdev);
 int mdp4_dsi_video_off(struct platform_device *pdev);
@@ -872,6 +874,12 @@ static inline void mdp4_overlay_dsi_video_start(void)
 static int mdp4_dsi_video_splash_done(void)
 {
 }
+#ifdef CONFIG_FB_MSM_MDP40
+static inline void mdp_dsi_cmd_overlay_suspend(struct msm_fb_data_type *mfd)
+{
+	
+}
+#endif
 #endif /* CONFIG_FB_MSM_MIPI_DSI */
 
 void mdp4_dsi_cmd_kickoff_ui(struct msm_fb_data_type *mfd,
