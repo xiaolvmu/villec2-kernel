@@ -27,6 +27,26 @@
 #define DEV_WARN(args...)	dev_warn(external_common_state->dev, args)
 #define DEV_ERR(args...)	dev_err(external_common_state->dev, args)
 
+struct hdmi_disp_mode_timing_info {
+	uint32	video_format;
+	uint32	active_h;
+	uint32	front_porch_h;
+	uint32	pulse_width_h;
+	uint32	back_porch_h;
+	boolean	active_low_h;
+	uint32	active_v;
+	uint32	front_porch_v;
+	uint32	pulse_width_v;
+	uint32	back_porch_v;
+	boolean	active_low_v;
+	
+	uint32	pixel_freq;
+	
+	uint32	refresh_rate;
+	boolean	interlaced;
+	boolean	supported;
+};
+
 #if defined(CONFIG_FB_MSM_HDMI_COMMON)
 extern int ext_resolution;
 
