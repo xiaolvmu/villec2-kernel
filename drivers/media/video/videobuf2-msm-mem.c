@@ -28,6 +28,7 @@
 #include <linux/memory_alloc.h>
 #include <media/videobuf2-msm-mem.h>
 #include <media/msm_camera.h>
+#include <media/msm_ion.h>
 #include <mach/memory.h>
 #include <mach/msm_subsystem_map.h>
 

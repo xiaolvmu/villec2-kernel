@@ -16,7 +16,7 @@
  */
 
 #include <linux/err.h>
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #include "ion_priv.h"
 
 struct ion_heap *ion_heap_create(struct ion_platform_heap *heap_data)

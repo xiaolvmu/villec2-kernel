@@ -25,6 +25,7 @@
 #include <linux/spinlock.h>
 #include <linux/slab.h>
 #include <linux/msm_audio.h>
+#include <linux/msm_ion.h>
 #include <linux/android_pmem.h>
 #include <linux/memory_alloc.h>
 #include <linux/debugfs.h>
