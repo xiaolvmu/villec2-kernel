@@ -20,7 +20,7 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/anon_inodes.h>
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #include <linux/list.h>
 #include <linux/memblock.h>
 #include <linux/miscdevice.h>
