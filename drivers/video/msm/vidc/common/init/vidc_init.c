@@ -28,6 +28,7 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/debugfs.h>
+#include <linux/msm_ion.h>
 #include <mach/clk.h>
 #include <linux/pm_runtime.h>
 #include <mach/msm_subsystem_map.h>
@@ -679,7 +680,7 @@ u32 vidc_insert_addr_table(struct video_client_ctx *client_ctx,
 						length,
 						(unsigned long *) &iova,
 						(unsigned long *) &buffer_size,
-						UNCACHED,
+						0,
 						ION_IOMMU_UNMAP_DELAYED);
 				if (ret || !iova) {
 					ERR(
