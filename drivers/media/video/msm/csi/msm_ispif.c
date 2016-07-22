@@ -22,6 +22,7 @@
 #define V4L2_IDENT_ISPIF			50001
 #define CSID_VERSION_V2                      0x2000011
 
+/* ISPIF registers */
 
 #define ISPIF_RST_CMD_ADDR                        0X00
 #define ISPIF_INTF_CMD_ADDR                       0X04
@@ -42,6 +43,7 @@
 #define ISPIF_IRQ_STATUS_1_ADDR                 0X0114
 #define ISPIF_IRQ_GLOBAL_CLEAR_CMD_ADDR         0x0124
 
+/*ISPIF RESET BITS*/
 
 #define VFE_CLK_DOMAIN_RST           31
 #define RDI_CLK_DOMAIN_RST           30
@@ -75,7 +77,6 @@ static struct ispif_device *ispif;
 atomic_t ispif_irq_cnt;
 spinlock_t  ispif_tasklet_lock;
 struct list_head ispif_tasklet_q;
-static atomic_t ispif_init_cnt = ATOMIC_INIT(0);
 
 static uint32_t global_intf_cmd_mask = 0xFFFFFFFF;
 
@@ -102,7 +103,6 @@ static int msm_ispif_intf_reset(uint8_t intfmask)
 			data = (0x1 << STROBED_RST_EN) +
 				(0x1 << RDI_VFE_RST_STB)  +
 				(0x1 << RDI_CSID_RST_STB);
-			ispif->rdi0_sof_count = 0;
 			break;
 
 		case RDI1:
@@ -117,7 +117,7 @@ static int msm_ispif_intf_reset(uint8_t intfmask)
 		}
 		mask >>= 1;
 		intfnum++;
-	}	
+	}	/*end while */
 	if (rc >= 0) {
 		msm_io_w(data, ispif->base + ISPIF_RST_CMD_ADDR);
 		rc = wait_for_completion_interruptible(&ispif->reset_complete);
@@ -164,7 +164,6 @@ static void msm_ispif_sel_csid_core(uint8_t intftype, uint8_t csid)
 		pr_err("%s: clk_set_rate failed %d\n", __func__, rc);
 
 	data = msm_io_r(ispif->base + ISPIF_INPUT_SEL_ADDR);
-	data &= ~(0x3<<(intftype*4));
 	data |= csid<<(intftype*4);
 	msm_io_w(data, ispif->base + ISPIF_INPUT_SEL_ADDR);
 }
@@ -212,13 +211,8 @@ static int msm_ispif_config(struct msm_ispif_params_list *params_list)
 	CDBG("Enable interface\n");
 	data = msm_io_r(ispif->base + ISPIF_PIX_STATUS_ADDR);
 	data1 = msm_io_r(ispif->base + ISPIF_RDI_STATUS_ADDR);
-
-	for (i = 0; i < params_len; i++) {
-		if (((data & 0xf) != 0xf && ispif_params[i].intftype == PIX0) ||
-		    ((data1 & 0xf) != 0xf && ispif_params[i].intftype == RDI0))
+	if (((data & 0xf) != 0xf) || ((data1 & 0xf) != 0xf))
 		return -EBUSY;
-	}
-
 	msm_io_w(0x00000000, ispif->base + ISPIF_IRQ_MASK_ADDR);
 	for (i = 0; i < params_len; i++) {
 		msm_ispif_sel_csid_core(ispif_params[i].intftype,
@@ -430,15 +424,6 @@ static void ispif_do_tasklet(unsigned long data)
 
 DECLARE_TASKLET(ispif_tasklet, ispif_do_tasklet, 0);
 
-static void send_rdi_sof(struct ispif_device *ispif,
-	enum msm_ispif_intftype interface, int count)
-{
-	struct rdi_count_msg sof_msg;
-	sof_msg.rdi_interface = interface;
-	sof_msg.count = count;
-	v4l2_subdev_notify(&ispif->subdev, NOTIFY_AXI_RDI_SOF_COUNT, (void *)&sof_msg);
-}
-
 static void ispif_process_irq(struct ispif_irq_status *out)
 {
 	unsigned long flags;
@@ -453,14 +438,6 @@ static void ispif_process_irq(struct ispif_irq_status *out)
 	}
 	qcmd->ispifInterruptStatus0 = out->ispifIrqStatus0;
 	qcmd->ispifInterruptStatus1 = out->ispifIrqStatus1;
-
-	if (qcmd->ispifInterruptStatus0 &
-			ISPIF_IRQ_STATUS_RDI_SOF_MASK) {
-			ispif->rdi0_sof_count++;
-			CDBG("%s: ispif RDI0 irq status, counter = %d",
-				__func__, ispif->rdi0_sof_count);
-			send_rdi_sof(ispif, RDI_0, ispif->rdi0_sof_count);
-	}
 
 	spin_lock_irqsave(&ispif_tasklet_lock, flags);
 	list_add_tail(&qcmd->list, &ispif_tasklet_q);
@@ -519,15 +496,6 @@ static struct msm_cam_clk_info ispif_clk_info[] = {
 static int msm_ispif_init(const uint32_t *csid_version)
 {
 	int rc = 0;
-	int init_cnt = atomic_read(&ispif_init_cnt);
-
-	BUG_ON(init_cnt < 0);
-	atomic_add(1, &ispif_init_cnt);
-	if (init_cnt) {
-		pr_info("%s: ispif has been initialized", __func__);
-		return rc;
-	}
-
 	spin_lock_init(&ispif_tasklet_lock);
 	INIT_LIST_HEAD(&ispif_tasklet_q);
 	rc = request_irq(ispif->irq->start, msm_io_ispif_irq,
@@ -555,15 +523,8 @@ static int msm_ispif_init(const uint32_t *csid_version)
 
 static void msm_ispif_release(struct v4l2_subdev *sd)
 {
-	int init_cnt;
-
-	atomic_sub(1, &ispif_init_cnt);
-	init_cnt = atomic_read(&ispif_init_cnt);
-	BUG_ON(init_cnt < 0);
-	if (init_cnt) {
-		pr_info("%s: skip ispif release", __func__);
-		return;
-	}
+	struct ispif_device *ispif =
+			(struct ispif_device *)v4l2_get_subdevdata(sd);
 
 	if (ispif->csid_version == CSID_VERSION_V2)
 		msm_cam_clk_enable(&ispif->pdev->dev, ispif_clk_info,
@@ -609,15 +570,6 @@ void msm_ispif_vfe_get_cid(uint8_t intftype, char *cids, int *num)
 	}
 }
 
-void msm_ispif_get_input_sel_cid(uint8_t intftype, uint8_t *csid)
-{
-	uint32_t data;
-	data = msm_io_r(ispif->base + ISPIF_INPUT_SEL_ADDR);
-
-	data >>= (intftype * 4);
-	*csid = data & 0x3;
-}
-
 static long msm_ispif_subdev_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 								void *arg)
 {
@@ -646,7 +598,6 @@ static const struct v4l2_subdev_ops msm_ispif_subdev_ops = {
 	.core = &msm_ispif_subdev_core_ops,
 	.video = &msm_ispif_subdev_video_ops,
 };
-static const struct v4l2_subdev_internal_ops msm_ispif_internal_ops;
 
 static int __devinit ispif_probe(struct platform_device *pdev)
 {
@@ -659,11 +610,6 @@ static int __devinit ispif_probe(struct platform_device *pdev)
 	}
 
 	v4l2_subdev_init(&ispif->subdev, &msm_ispif_subdev_ops);
-	ispif->subdev.internal_ops = &msm_ispif_internal_ops;
-	ispif->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-	snprintf(ispif->subdev.name,
-			ARRAY_SIZE(ispif->subdev.name), "msm_ispif");
-	
 	v4l2_set_subdevdata(&ispif->subdev, ispif);
 	platform_set_drvdata(pdev, &ispif->subdev);
 	snprintf(ispif->subdev.name, sizeof(ispif->subdev.name),
@@ -699,8 +645,6 @@ static int __devinit ispif_probe(struct platform_device *pdev)
 	}
 
 	ispif->pdev = pdev;
-	
-	msm_cam_register_subdev_node(&ispif->subdev, ISPIF_DEV, pdev->id);
 	return 0;
 
 ispif_no_mem:

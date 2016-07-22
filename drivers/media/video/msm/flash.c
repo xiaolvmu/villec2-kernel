@@ -23,7 +23,6 @@
 #include <mach/pmic.h>
 #include <mach/camera.h>
 #include <mach/gpio.h>
-#include <mach/htc_battery_core.h>
 #include <linux/htc_flashlight.h>
 
 struct i2c_client *sx150x_client;
@@ -149,17 +148,12 @@ static int config_flash_gpio_table(enum msm_cam_flash_stat stat,
 	return rc;
 }
 
-#define BATT_LOW_POWER 35
-
 int msm_camera_flash(
 	struct msm_camera_sensor_flash_src *flash_src,
 	unsigned led_state)
 {
 	int flash_level = 0;
 	pr_info("[FLT] %s state %d\n", __func__, led_state);
-
-	if ((led_state == MSM_CAMERA_LED_HIGH) && htc_get_batt_level() <= BATT_LOW_POWER)
-		led_state = MSM_CAMERA_LED_LOW;
 
 	if (!flash_src->camera_flash)  return 0;
 
@@ -169,9 +163,6 @@ int msm_camera_flash(
 			break;
 		case MSM_CAMERA_LED_LOW:
 			flash_level = FL_MODE_PRE_FLASH;
-			break;
-                case MSM_CAMERA_LED_VIDEO:
-			flash_level = FL_MODE_VIDEO_TORCH;
 			break;
 		case MSM_CAMERA_LED_OFF:
 		case MSM_CAMERA_LED_INIT:
