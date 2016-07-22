@@ -79,6 +79,49 @@ static inline dma_addr_t virt_to_dma(struct device *dev, void *addr)
 }
 #endif
 
+static inline void __dma_single_cpu_to_dev(const void *kaddr, size_t size,
+	enum dma_data_direction dir)
+{
+	extern void ___dma_single_cpu_to_dev(const void *, size_t,
+		enum dma_data_direction);
+
+	if (!arch_is_coherent())
+		___dma_single_cpu_to_dev(kaddr, size, dir);
+}
+
+static inline void __dma_single_dev_to_cpu(const void *kaddr, size_t size,
+	enum dma_data_direction dir)
+{
+	extern void ___dma_single_dev_to_cpu(const void *, size_t,
+		enum dma_data_direction);
+
+	if (!arch_is_coherent())
+		___dma_single_dev_to_cpu(kaddr, size, dir);
+}
+
+static inline void __dma_page_cpu_to_dev(struct page *page, unsigned long off,
+	size_t size, enum dma_data_direction dir)
+{
+	extern void ___dma_page_cpu_to_dev(struct page *, unsigned long,
+		size_t, enum dma_data_direction);
+
+	if (!arch_is_coherent())
+		___dma_page_cpu_to_dev(page, off, size, dir);
+}
+
+static inline void __dma_page_dev_to_cpu(struct page *page, unsigned long off,
+	size_t size, enum dma_data_direction dir)
+{
+	extern void ___dma_page_dev_to_cpu(struct page *, unsigned long,
+		size_t, enum dma_data_direction);
+
+	if (!arch_is_coherent())
+		___dma_page_dev_to_cpu(page, off, size, dir);
+}
+
+extern int dma_supported(struct device *, u64);
+extern int dma_set_mask(struct device *, u64);
+
 static inline int dma_mapping_error(struct device *dev, dma_addr_t dma_addr)
 {
 	return dma_addr == DMA_ERROR_CODE;
@@ -118,8 +161,6 @@ static inline void dma_coherent_post_ops(void)
 		barrier();
 #endif
 }
-
-extern int dma_supported(struct device *dev, u64 mask);
 
 extern void *dma_alloc_coherent(struct device *, size_t, dma_addr_t *, gfp_t);
 
@@ -190,10 +231,49 @@ static inline int dma_mmap_nonconsistent(struct device *dev,
 
 extern void __init init_consistent_dma_size(unsigned long size);
 
+
+#ifdef CONFIG_DMABOUNCE
+
 extern int dmabounce_register_dev(struct device *, unsigned long,
 		unsigned long, int (*)(struct device *, dma_addr_t, size_t));
 
 extern void dmabounce_unregister_dev(struct device *);
+
+extern dma_addr_t __dma_map_page(struct device *, struct page *,
+		unsigned long, size_t, enum dma_data_direction);
+extern void __dma_unmap_page(struct device *, dma_addr_t, size_t,
+		enum dma_data_direction);
+
+int dmabounce_sync_for_cpu(struct device *, dma_addr_t, size_t, enum dma_data_direction);
+int dmabounce_sync_for_device(struct device *, dma_addr_t, size_t, enum dma_data_direction);
+#else
+static inline int dmabounce_sync_for_cpu(struct device *d, dma_addr_t addr,
+	size_t size, enum dma_data_direction dir)
+{
+	return 1;
+}
+
+static inline int dmabounce_sync_for_device(struct device *d, dma_addr_t addr,
+	size_t size, enum dma_data_direction dir)
+{
+	return 1;
+}
+
+
+static inline dma_addr_t __dma_map_page(struct device *dev, struct page *page,
+	     unsigned long offset, size_t size, enum dma_data_direction dir)
+{
+	__dma_page_cpu_to_dev(page, offset, size, dir);
+	return pfn_to_dma(dev, page_to_pfn(page)) + offset;
+}
+
+static inline void __dma_unmap_page(struct device *dev, dma_addr_t handle,
+		size_t size, enum dma_data_direction dir)
+{
+	__dma_page_dev_to_cpu(pfn_to_page(dma_to_pfn(dev, handle)),
+		handle & ~PAGE_MASK, size, dir);
+}
+#endif 
 
 static inline void dma_cache_pre_ops(void *virtual_addr,
 		size_t size, enum dma_data_direction dir)
