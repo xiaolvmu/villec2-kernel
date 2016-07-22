@@ -18,7 +18,7 @@
 #include <linux/io.h>
 #include <linux/msm_ssbi.h>
 #include <linux/mfd/pmic8058.h>
-
+#include <linux/msm_ion.h>
 #include <linux/leds.h>
 #include <linux/leds-pm8058.h>
 #include <linux/cm3629.h>
@@ -1142,7 +1142,43 @@ static struct platform_device htc_battery_pdev = {
 
 
 #ifdef CONFIG_FLASHLIGHT_TPS61310
+#ifdef CONFIG_MSM_CAMERA_FLASH
+static int flashlight_control(int mode)
+{
+/* HTC_START Turn off backlight when flash on */
+	int	rc;
+	static int brightness = 255;
+	static int backlight_off = 0;
 
+	pr_info("[CAM] %s, linear led, mode %d backlight_off %d", __func__, mode, backlight_off);
+
+	if (mode != FL_MODE_PRE_FLASH && mode != FL_MODE_OFF) {
+		if (!backlight_off) {
+			/* restore backlight brightness value first */
+			brightness = led_brightness_value_get("lcd-backlight");
+			if (brightness >= 0 && brightness <= 255) {
+				pr_info("[CAM] %s, Turn off backlight before flashlight, brightness %d", __func__, brightness);
+				led_brightness_value_set("lcd-backlight", 0);
+				backlight_off = 1;
+			} else
+				pr_err("[CAM] %s, Invalid brightness value!! brightness %d", __func__, brightness);
+		}
+	}
+
+	rc = tps61310_flashlight_control(mode);
+
+	if (mode == FL_MODE_PRE_FLASH || mode == FL_MODE_OFF) {
+		if(backlight_off) {
+			pr_info("[CAM] %s, Turn on backlight after flashlight, brightness %d", __func__, brightness);
+			led_brightness_value_set("lcd-backlight", brightness);
+			backlight_off = 0;
+		}
+	}
+
+	return rc;
+/* HTC_END */
+}
+#endif
 
 static void config_flashlight_gpios(void)
 {
@@ -1446,6 +1482,907 @@ static struct platform_device pm8058_leds = {
 		.platform_data	= &pm8058_leds_data,
 	},
 };
+#endif
+static void config_gpio_table(uint32_t *table, int len)
+{
+	int n, rc;
+	for (n = 0; n < len; n++) {
+		rc = gpio_tlmm_config(table[n], GPIO_CFG_ENABLE);
+		if (rc) {
+			pr_err("[CAM] %s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, table[n], rc);
+			break;
+		}
+	}
+}
+
+#ifdef CONFIG_MSM_CAMERA
+#ifdef CONFIG_RAWCHIP
+static uint32_t msm_spi_on_gpio[] = {
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_DO, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_DI, 1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_CS, 1 , GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_CLK, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+};
+#endif
+static uint32_t camera_off_gpio_table[] = {
+	GPIO_CFG(VILLEC2_CAM_I2C_SDA, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_CAM_I2C_SCL, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+//	GPIO_CFG(32, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA),
+	GPIO_CFG(VILLEC2_CAM_ID, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),
+	GPIO_CFG(VILLEC2_GPIO_CAM_MCLK, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_16MA), /* MCLK */
+};
+
+static uint32_t camera_on_gpio_table[] = {
+	GPIO_CFG(VILLEC2_CAM_I2C_SDA, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_CAM_I2C_SCL, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+//	GPIO_CFG(32, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA),
+	GPIO_CFG(VILLEC2_CAM_ID, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA),
+	GPIO_CFG(VILLEC2_GPIO_CAM_MCLK, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), //RMDBG
+};
+
+static struct regulator *villec2_reg_8901_l0 = NULL;
+static struct regulator *villec2_reg_8058_l8 = NULL;
+static struct regulator *villec2_reg_8058_l9 = NULL;
+static struct regulator *villec2_reg_8058_l14 = NULL;
+static struct regulator *villec2_reg_8058_l15 = NULL;
+static struct regulator *votg_2_8v_switch = NULL;
+
+static int camera_sensor_power_enable(char *power, unsigned volt, struct regulator **sensor_power)
+{
+	int rc;
+	if (power == NULL)
+		return -ENODEV;
+
+	*sensor_power = regulator_get(NULL, power);
+	if (IS_ERR(sensor_power)) {
+		pr_err("[CAM] %s: Unable to get %s\n", __func__, power);
+		return -ENODEV;
+	}
+	rc = regulator_set_voltage(*sensor_power, volt, volt);
+	if (rc) {
+		pr_err("[CAM] %s: unable to set %s voltage to %d rc:%d\n",
+			__func__, power, volt, rc);
+		regulator_put(*sensor_power);
+		*sensor_power = NULL;
+		return -ENODEV;
+	}
+	rc = regulator_enable(*sensor_power);
+	if (rc) {
+		pr_err("[CAM] %s: Enable regulator %s failed\n", __func__, power);
+		regulator_put(*sensor_power);
+		*sensor_power = NULL;
+	}
+
+	return rc;
+}
+
+
+static int camera_sensor_power_disable(struct regulator *sensor_power)
+{
+	int rc;
+	if (sensor_power == NULL)
+		return -ENODEV;
+
+	if (IS_ERR(sensor_power)) {
+		pr_err("[CAM] %s: Invalid regulator ptr\n", __func__);
+		return -ENODEV;
+	}
+	rc = regulator_disable(sensor_power);
+	if (rc)
+		pr_err("[CAM] %s: Disable regulator failed\n", __func__);
+
+	regulator_put(sensor_power);
+	sensor_power = NULL;
+	return rc;
+
+}
+#ifdef CONFIG_RAWCHIP
+static int villec2_use_ext_1v2(void)
+{
+	return 0;
+}
+static int config_rawchip_on_gpios(void);
+static void Villec2_maincam_clk_switch(void);
+
+static int villec2_rawchip_vreg_on(void)
+{
+	int rc;
+	pr_info("[CAM] %s\n", __func__);
+
+	/* VCM */
+	rc = camera_sensor_power_enable("8058_l14", 2850000, &villec2_reg_8058_l14);
+	pr_info("[CAM] sensor_power_enable(\"8058_l14\", 2.85V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] rawchip_power_enable(\"8058_l14\", 2.8V) FAILED %d\n", rc);
+		goto enable_VCM_fail;
+	}
+
+	/* PM8921_lvs6 1800000 */
+	rc = camera_sensor_power_enable("8058_l8", 1800000, &villec2_reg_8058_l8);
+	pr_info("[CAM] sensor_power_enable(\"8058_l8\", 1.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] rawchip_power_enable(\"8058_l8\", 1.8V) FAILED %d\n", rc);
+		goto enable_1v8_fail;
+	}
+
+
+	/* digital */
+
+	rc = gpio_request(VILLEC2_GPIO_V_CAM_D1V2_EN, "CAM_D1V2");
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"gpio %d\", 1.2V) FAILED %d\n", VILLEC2_GPIO_V_CAM_D1V2_EN, rc);
+		goto enable_1v2_fail;
+	}
+	gpio_direction_output(VILLEC2_GPIO_V_CAM_D1V2_EN, 1);
+	gpio_free(VILLEC2_GPIO_V_CAM_D1V2_EN);
+
+		//RMDBG FIXME this should be removed after EVM
+		rc = camera_sensor_power_enable("8901_l0", 1200000, &villec2_reg_8901_l0);
+		pr_info("[CAM] sensor_power_enable(\"8901_l0\", 1.2V) == %d\n", rc);
+
+	/* analog */
+	/* Mu Lee for sequence with raw chip 20120116 */
+	rc = camera_sensor_power_enable("8058_l15", 2800000, &villec2_reg_8058_l15);
+	pr_info("[CAM] sensor_power_enable(\"8058_l15\", 2.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"8058_l15\", 2.8V) FAILED %d\n", rc);
+		goto enable_analog_fail;
+	}
+
+	votg_2_8v_switch = regulator_get(NULL, "8901_usb_otg");
+	if (IS_ERR(votg_2_8v_switch)) {
+		pr_err("[CAM] %s: unable to get votg_2_8v_switch\n", __func__);
+		goto enable_analog_fail;
+	}
+	if (regulator_enable(votg_2_8v_switch)) {
+		pr_err("[CAM] %s: Unable to enable the regulator: votg_2_8v_switch\n", __func__);
+		regulator_put(votg_2_8v_switch);
+		votg_2_8v_switch = NULL;
+		goto enable_analog_fail;
+	}
+
+	msleep(1);
+
+	/* LCMIO */
+	rc = camera_sensor_power_enable("8058_l9", 1800000, &villec2_reg_8058_l9);
+	pr_info("[CAM] sensor_power_enable(\"8058_l9\", 1.8V) == %d\n", rc);
+
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"8058_l9\", 2.8V) FAILED %d\n", rc);
+		goto lcmio_hi_fail;
+	}
+
+	config_rawchip_on_gpios();
+	// Optical Mu
+	Villec2_maincam_clk_switch();
+
+	return rc;
+
+lcmio_hi_fail:
+	camera_sensor_power_disable(villec2_reg_8058_l9);
+enable_analog_fail:
+	gpio_request(VILLEC2_GPIO_V_CAM_D1V2_EN, "CAM_D1V2_EN");
+	gpio_direction_output(VILLEC2_GPIO_V_CAM_D1V2_EN, 0);
+	gpio_free(VILLEC2_GPIO_V_CAM_D1V2_EN);
+enable_1v2_fail:
+	camera_sensor_power_disable(villec2_reg_8058_l8);
+enable_1v8_fail:
+	camera_sensor_power_disable(villec2_reg_8058_l14);
+enable_VCM_fail:
+	return rc;
+}
+static void config_rawchip_off_gpios(void);
+static int villec2_rawchip_vreg_off(void)
+{
+	int rc = 0;
+
+	pr_info("[CAM] %s\n", __func__);
+
+	if ((votg_2_8v_switch == NULL) || IS_ERR(votg_2_8v_switch)) {
+		pr_err("[CAM] %s: unable to get votg_2_8v_switch\n", __func__);
+		goto ville_rawchip_vreg_off_fail;
+	}
+	if (regulator_disable(votg_2_8v_switch)) {
+		pr_err("[CAM] %s: Unable to disable the regulator: votg_2_8v_switch\n", __func__);
+		regulator_put(votg_2_8v_switch);
+		votg_2_8v_switch = NULL;
+		goto ville_rawchip_vreg_off_fail;
+	}
+	regulator_put(votg_2_8v_switch);
+	votg_2_8v_switch = NULL;
+	mdelay(1);
+
+	rc = camera_sensor_power_disable(villec2_reg_8058_l15);
+	pr_info("[CAM] sensor_power_disable(\"8058_l15\") == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] rawchip_power_disable(\"8058_l15\", 1.8V) FAILED %d\n", rc);
+		goto ville_rawchip_vreg_off_fail;
+	}
+
+
+		//RMDBG FIXME this should not be here after EVM  V_CAM_D1V2
+		rc = camera_sensor_power_disable(villec2_reg_8901_l0);
+		pr_info("[CAM] sensor_power_disable(\"8901_l0\") == %d\n", rc);
+
+
+	rc = gpio_request(VILLEC2_GPIO_V_CAM_D1V2_EN, "RAW_1V2_EN");
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"gpio %d\", 1.2V) FAILED %d\n", VILLEC2_GPIO_V_CAM_D1V2_EN, rc);
+		goto ville_rawchip_vreg_off_fail;
+	}
+	gpio_direction_output(VILLEC2_GPIO_V_CAM_D1V2_EN, 0);
+	gpio_free(VILLEC2_GPIO_V_CAM_D1V2_EN);
+
+
+	rc = camera_sensor_power_disable(villec2_reg_8058_l9);
+	pr_info("[CAM] sensor_power_disable(\"8058_l9\") == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] rawchip_power_disable(\"8058_l9\", 1.8V) FAILED %d\n", rc);
+		goto ville_rawchip_vreg_off_fail;
+	}
+
+
+	rc = camera_sensor_power_disable(villec2_reg_8058_l8);
+	pr_info("[CAM] sensor_power_disable(\"8058_l8\") == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_disable(\"8058_l9\") FAILED %d\n", rc);
+		goto ville_rawchip_vreg_off_fail;
+	}
+
+	/* VCM */
+	/* Mu Lee for sequenc with raw chip 20120116 */
+	rc = camera_sensor_power_disable(villec2_reg_8058_l14);
+	pr_info("[CAM] sensor_power_disable(\"8058_l14\") == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_disable(\"8058_l14\") FAILED %d\n", rc);
+		goto ville_rawchip_vreg_off_fail;
+	}
+	config_rawchip_off_gpios();
+	return rc;
+
+ville_rawchip_vreg_off_fail:
+	return rc;
+}
+
+static uint32_t rawchip_on_gpio_table[] = {
+	GPIO_CFG(VILLEC2_GPIO_RAW_RSTN, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), /* RAW CHIP Reset */
+	GPIO_CFG(VILLEC2_GPIO_RAW_INTR0, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), /* RAW CHIP INT0 */
+	GPIO_CFG(VILLEC2_GPIO_RAW_INTR1, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), /* RAW CHIP INT1 */
+	GPIO_CFG(7, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),  //RMDBG
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_DO, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_DI, 1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_CS, 1 , GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_CLK, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_CAM_MCLK, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), //RMDBG
+	GPIO_CFG(VILLEC2_CAM_I2C_SDA, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_CAM_I2C_SCL, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+};
+
+static uint32_t rawchip_off_gpio_table[] = {
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_DO, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_DI, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_CS, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_GPIO_MCAM_SPI_CLK, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_CAM_I2C_SDA, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_CAM_I2C_SCL, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_8MA),
+	GPIO_CFG(VILLEC2_CAM_ID, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),
+//RMDBG GPIO_CFG(VILLEC2_GPIO_RAW_RSTN, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), /* RAW CHIP Reset */
+	GPIO_CFG(VILLEC2_GPIO_RAW_INTR0, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* RAW CHIP INT0 */
+	GPIO_CFG(VILLEC2_GPIO_RAW_INTR1, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* RAW CHIP INT1 */
+	GPIO_CFG(VILLEC2_GPIO_CAM_MCLK, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_16MA), /* MCLK */
+};
+
+static int config_rawchip_on_gpios(void)
+{
+	pr_info("[CAM] config_rawchip_on_gpios\n");
+	config_gpio_table(rawchip_on_gpio_table,
+		ARRAY_SIZE(rawchip_on_gpio_table));
+	return 0;
+}
+static void config_rawchip_off_gpios(void)
+{
+	pr_info("[CAM] config_rawchip_off_gpios\n");
+	config_gpio_table(rawchip_off_gpio_table,
+		ARRAY_SIZE(rawchip_off_gpio_table));
+}
+
+static struct msm_camera_rawchip_info msm_rawchip_board_info = {
+	.rawchip_reset	= VILLEC2_GPIO_RAW_RSTN,
+	.rawchip_intr0	= VILLEC2_GPIO_RAW_INTR0,
+	.rawchip_intr1	= VILLEC2_GPIO_RAW_INTR1,
+	.rawchip_spi_freq = 27, /* MHz, should be the same to spi max_speed_hz */
+	.rawchip_mclk_freq = 24, /* MHz, should be the same as cam csi0 mclk_clk_rate */
+	.camera_rawchip_power_on = villec2_rawchip_vreg_on,
+	.camera_rawchip_power_off = villec2_rawchip_vreg_off,
+	.rawchip_gpio_on = config_rawchip_on_gpios,
+	.rawchip_gpio_off = config_rawchip_off_gpios,
+	.rawchip_use_ext_1v2 = villec2_use_ext_1v2,
+};
+
+static struct platform_device msm_rawchip_device = {
+	.name	= "rawchip",
+	.dev	= {
+		.platform_data = &msm_rawchip_board_info,
+	},
+};
+
+static struct spi_board_info spi_rawchip_board_info[] __initdata = {
+	{
+		.modalias	= "spi_rawchip",
+		.mode           = SPI_MODE_0,
+		.bus_num        = 0,
+		.chip_select    = 0,
+		.max_speed_hz   = 27000000,
+	}
+};
+
+#endif
+
+#ifdef CONFIG_S5K3H2YX
+static int Villec2_s5k3h2yx_vreg_on(void)
+{
+	int rc = 0;
+	pr_info("[CAM] %s\n", __func__);
+
+	return rc;
+}
+
+static int Villec2_s5k3h2yx_vreg_off(void)
+{
+	int rc = 0;
+	pr_info("[CAM] %s\n", __func__);
+	return rc;
+}
+#endif
+#define CLK_SWITCH 141
+
+static int villec2_config_camera_on_gpios(void);
+static void villec2_config_camera_off_gpios(void);
+
+#ifdef CONFIG_MT9V113
+static int Villec2_mt9v113_vreg_on(void)
+{
+	int rc = 0;
+
+	pr_info("[CAM] %s\n", __func__);
+
+	/* VCM */
+	/* Mu Lee for sequence with raw chip 20120116 */
+	rc = camera_sensor_power_enable("8058_l14", 2850000, &villec2_reg_8058_l14);
+	pr_info("[CAM] sensor_power_enable(\"8058_l14\", 2.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"8058_l14\", 2.8V) FAILED %d\n", rc);
+		goto init_fail;
+	}
+	udelay(50);
+
+	/* IO */
+	rc = camera_sensor_power_enable("8058_l8", 1800000, &villec2_reg_8058_l8);
+	pr_info("[CAM] sensor_power_enable(\"8058_l8\", 1.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"8058_l8\", 1.8V) FAILED %d\n", rc);
+		goto init_fail;
+	}
+	udelay(50);
+
+	/* analog */
+	rc = camera_sensor_power_enable("8058_l15", 2800000, &villec2_reg_8058_l15);
+	pr_info("[CAM] sensor_power_enable(\"8058_l15\", 2.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"8058_l15\", 2.8V) FAILED %d\n", rc);
+		goto init_fail;
+	}
+	udelay(50);
+
+	/* digital */
+	rc = camera_sensor_power_enable("8058_l9", 1800000, &villec2_reg_8058_l9);
+	pr_info("[CAM] sensor_power_enable(\"8058_l9\", 1.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_enable(\"8058_l9\", 1.8V) FAILED %d\n", rc);
+		goto init_fail;
+	}
+	udelay(50);
+
+	/* Reset */
+	pr_info("[CAM] Do Reset pin On\n");
+	rc = gpio_request(VILLEC2_GPIO_CAM2_RSTz, "mt9v113");
+	if (rc < 0) {
+		pr_err("[CAM] %s:VILLEC2_GPIO_CAM2_RSTz gpio %d request failed, rc=%d\n", __func__,  VILLEC2_GPIO_CAM2_RSTz, rc);
+		goto init_fail;
+	}
+	gpio_direction_output(VILLEC2_GPIO_CAM2_RSTz, 1);
+	msleep(2);
+	gpio_free(VILLEC2_GPIO_CAM2_RSTz);
+
+	udelay(50);
+	villec2_config_camera_on_gpios();
+
+init_fail:
+	return rc;
+}
+
+static int Villec2_mt9v113_vreg_off(void)
+{
+	int rc = 0;
+
+	pr_info("[CAM] %s\n", __func__);
+
+	/* Reset */
+	pr_info("[CAM] Do Reset pin Off\n");
+	rc = gpio_request(VILLEC2_GPIO_CAM2_RSTz, "mt9v113");
+	if (rc < 0) {
+		pr_err("[CAM] %s:VILLEC2_GPIO_CAM2_RSTz gpio %d request failed, rc=%d\n", __func__,	VILLEC2_GPIO_CAM2_RSTz, rc);
+		goto init_fail;
+	}
+	gpio_direction_output(VILLEC2_GPIO_CAM2_RSTz, 0);
+	msleep(2);
+	gpio_free(VILLEC2_GPIO_CAM2_RSTz);
+
+	udelay(50);
+
+	/* digital */
+	rc = camera_sensor_power_disable(villec2_reg_8058_l9);
+	pr_info("[CAM] camera_sensor_power_disable(\"8058_l9\", 1.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_disable(\"8058_l9\") FAILED %d\n", rc);
+		goto init_fail;
+	}
+	udelay(50);
+
+	/* analog */
+	rc = camera_sensor_power_disable(villec2_reg_8058_l15);
+	pr_info("[CAM] camera_sensor_power_disable(\"8058_l15\", 2.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_disable(\"8058_l15\") FAILED %d\n", rc);
+		goto init_fail;
+	}
+	udelay(50);
+
+	/* IO */
+	rc = camera_sensor_power_disable(villec2_reg_8058_l8);
+	pr_info("[CAM] camera_sensor_power_disable(\"8058_l8\", 1.8V) == %d\n", rc);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_disable(\"8058_l8\") FAILED %d\n", rc);
+		goto init_fail;
+	}
+	udelay(50);
+
+	/* VCM */
+	pr_info("[CAM] camera_sensor_power_disable(\"8058_l14\", 2.8V) == %d\n", rc);
+	rc = camera_sensor_power_disable(villec2_reg_8058_l14);
+	if (rc < 0) {
+		pr_err("[CAM] sensor_power_disable(\"8058_l14\") FAILED %d\n", rc);
+		goto init_fail;
+	}
+
+	villec2_config_camera_off_gpios();
+
+	/* Per optical request, config CAM_SEL GPIO into sleep state*/
+	pr_info("[CAM] Doing clk switch to sleep state\n");
+	rc = gpio_request(CLK_SWITCH, "CAM_SEL");
+	if (rc < 0)
+	{
+		pr_err("[CAM] GPIO (%d) request fail\n", CLK_SWITCH);
+		goto init_fail;
+	}
+	gpio_direction_output(CLK_SWITCH, 0);
+	gpio_free(CLK_SWITCH);
+
+init_fail:
+		return rc;
+}
+#endif
+
+static void Villec2_maincam_clk_switch(void)
+{
+	int rc = 0;
+	pr_info("[CAM] Doing clk switch (Main Cam)\n");
+	rc = gpio_request(CLK_SWITCH, "s5k3h2yx");
+	if (rc < 0)
+		pr_err("[CAM] GPIO (%d) request fail\n", CLK_SWITCH);
+	else
+		gpio_direction_output(CLK_SWITCH, 0);
+	gpio_free(CLK_SWITCH);
+	return;
+}
+
+#ifdef CONFIG_MT9V113
+static void Villec2_seccam_clk_switch(void)
+{
+	int rc = 0;
+	pr_info("[CAM] Doing clk switch (2nd Cam)\n");
+	rc = gpio_request(CLK_SWITCH, "mt9v113");
+
+	if (rc < 0)
+		pr_err("[CAM] GPIO (%d) request fail\n", CLK_SWITCH);
+	else
+		gpio_direction_output(CLK_SWITCH, 1);
+
+	gpio_free(CLK_SWITCH);
+	return;
+}
+#endif
+static int villec2_config_camera_on_gpios(void)
+{
+	config_gpio_table(camera_on_gpio_table,
+		ARRAY_SIZE(camera_on_gpio_table));
+	return 0;
+}
+
+static void villec2_config_camera_off_gpios(void)
+{
+	config_gpio_table(camera_off_gpio_table,
+		ARRAY_SIZE(camera_off_gpio_table));
+}
+
+
+#if 1 //RMDBG#ifdef CONFIG_MSM_BUS_SCALING
+static struct msm_bus_vectors cam_init_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+};
+
+static struct msm_bus_vectors cam_zsl_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 566231040,
+		.ib  = 905969664,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 706199040,
+		.ib  = 1129918464,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 320864256,
+		.ib  = 513382810,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 320864256,
+		.ib  = 513382810,
+	},
+};
+
+static struct msm_bus_vectors cam_stereo_video_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 212336640,
+		.ib  = 339738624,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 25090560,
+		.ib  = 40144896,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 239708160,
+		.ib  = 383533056,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 79902720,
+		.ib  = 127844352,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+};
+
+static struct msm_bus_vectors cam_stereo_snapshot_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 300902400,
+		.ib  = 481443840,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 230307840,
+		.ib  = 368492544,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 245113344,
+		.ib  = 392181351,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab  = 106536960,
+		.ib  = 170459136,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 106536960,
+		.ib  = 170459136,
+	},
+};
+
+static struct msm_bus_paths cam_bus_client_config[] = {
+	{
+		ARRAY_SIZE(cam_init_vectors),
+		cam_init_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_zsl_vectors),
+		cam_zsl_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_zsl_vectors),
+		cam_zsl_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_zsl_vectors),
+		cam_zsl_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_zsl_vectors),
+		cam_zsl_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_stereo_video_vectors),
+		cam_stereo_video_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_stereo_snapshot_vectors),
+		cam_stereo_snapshot_vectors,
+	},
+};
+
+static struct msm_bus_scale_pdata cam_bus_client_pdata = {
+		cam_bus_client_config,
+		ARRAY_SIZE(cam_bus_client_config),
+		.name = "msm_camera",
+};
+#endif
+
+#ifdef CONFIG_S5K3H2YX
+static struct msm_camera_device_platform_data msm_camera_device_data_0 = {
+	.camera_gpio_on  = villec2_config_camera_on_gpios,
+	.camera_gpio_off = villec2_config_camera_off_gpios,
+	.ioext.csiphy = 0x04800000,
+	.ioext.csisz  = 0x00000400,
+	.ioext.csiirq = CSI_0_IRQ,
+	.ioclk.mclk_clk_rate = 24000000,
+	.ioclk.vfe_clk_rate  = 266667000,
+	.csid_core = 0,
+	.is_csic = 1,
+	.is_vpe = 1,
+	.cam_bus_scale_table = &cam_bus_client_pdata,
+
+};
+#endif
+
+#ifdef CONFIG_MT9V113
+static struct msm_camera_device_platform_data msm_camera_device_data_1 = {
+	.camera_gpio_on  = villec2_config_camera_on_gpios,
+	.camera_gpio_off = villec2_config_camera_off_gpios,
+	.ioext.csiphy = 0x04900000,
+	.ioext.csisz  = 0x00000400,
+	.ioext.csiirq = CSI_1_IRQ,
+	.ioclk.mclk_clk_rate = 24000000,
+	.ioclk.vfe_clk_rate  = 266667000,
+	.csid_core = 1,
+	.is_csic = 1,
+	.is_vpe = 1,
+	.cam_bus_scale_table = &cam_bus_client_pdata,
+
+};
+#endif
+
+struct resource msm_camera_resources[] = {
+	{
+		.start	= 0x04500000,
+		.end	= 0x04500000 + SZ_1M - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= VFE_IRQ,
+		.end	= VFE_IRQ,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+
+static struct msm_camera_sensor_flash_src msm_flash_src = {
+	.flash_sr_type				= MSM_CAMERA_FLASH_SRC_CURRENT_DRIVER,
+	.camera_flash				= flashlight_control,
+};
+
+static struct camera_flash_cfg msm_camera_sensor_flash_cfg = {
+	.low_temp_limit		= 5,
+	.low_cap_limit		= 15,
+};
+
+#ifdef CONFIG_S5K3H2YX_ACT
+static struct i2c_board_info s5k3h2yx_actuator_i2c_info = {
+	I2C_BOARD_INFO("s5k3h2yx_act", 0x11),
+};
+
+static struct msm_actuator_info s5k3h2yx_actuator_info = {
+	.board_info     = &s5k3h2yx_actuator_i2c_info,
+	.bus_id         = MSM_GSBI4_QUP_I2C_BUS_ID,
+	.vcm_pwd        = VILLEC2_GPIO_CAM_VCM_PD,
+	.vcm_enable     = 1,
+};
+#endif
+
+#ifdef CONFIG_S5K3H2YX
+static struct msm_camera_sensor_flash_data flash_s5k3h2yx = {
+	.flash_type		= MSM_CAMERA_FLASH_LED,
+	.flash_src		= &msm_flash_src
+};
+static struct msm_camera_sensor_platform_info sensor_s5k3h2yx_board_info = {
+	.mount_angle = 90,
+	.sensor_reset_enable = 0,
+	.sensor_reset	= 0,
+	.sensor_pwd	= VILLEC2_GPIO_CAM_PWDN,
+	.vcm_pwd	= VILLEC2_GPIO_CAM_VCM_PD,
+	.vcm_enable	= 1,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_s5k3h2yx_data = {
+	.sensor_name	= "s5k3h2yx",
+#ifdef CONFIG_S5K3H2YX_ACT
+	.actuator_info = &s5k3h2yx_actuator_info,
+#endif
+	.camera_power_on = Villec2_s5k3h2yx_vreg_on,
+	.camera_power_off = Villec2_s5k3h2yx_vreg_off,
+	.camera_clk_switch = Villec2_maincam_clk_switch,
+	.pdata = &msm_camera_device_data_0,
+	.resource = msm_camera_resources,
+	.num_resources = ARRAY_SIZE(msm_camera_resources),
+	.flash_data = &flash_s5k3h2yx,
+	.flash_cfg = &msm_camera_sensor_flash_cfg,
+	.sensor_platform_info = &sensor_s5k3h2yx_board_info,
+	.mirror_mode = 1,
+	.csi_if = 1,
+	.use_rawchip = 1,
+	.dev_node = 0
+};
+
+struct platform_device villec2_camera_sensor_s5k3h2yx = {
+	.name	= "msm_camera_s5k3h2yx",
+	.dev	= {
+		.platform_data = &msm_camera_sensor_s5k3h2yx_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_MT9V113
+static struct msm_camera_sensor_flash_data flash_mt9v113 = {
+	.flash_type	= MSM_CAMERA_FLASH_NONE,
+};
+
+static struct msm_camera_sensor_platform_info sensor_mt9v113_board_info = {
+	.mount_angle = 270,
+	.sensor_reset_enable = 1,
+	.sensor_reset	= VILLEC2_GPIO_CAM2_RSTz,
+	.sensor_pwd = VILLEC2_GPIO_CAM2_PWDN,
+	.vcm_pwd	= 0,
+	.vcm_enable = 1,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_mt9v113_data = {
+	.sensor_name	= "mt9v113",
+	.camera_power_on = Villec2_mt9v113_vreg_on,
+	.camera_power_off = Villec2_mt9v113_vreg_off,
+	.camera_clk_switch = Villec2_seccam_clk_switch,
+	.sensor_reset	= VILLEC2_GPIO_CAM2_RSTz,
+	.pdata	= &msm_camera_device_data_1,
+	.flash_data	= &flash_mt9v113,
+	.sensor_platform_info = &sensor_mt9v113_board_info,
+	.csi_if	= 1,
+	.use_rawchip = 0,
+	.dev_node = 1,
+	.cam_select_pin = CLK_SWITCH,
+};
+
+struct platform_device villec2_camera_sensor_mt9v113 = {
+	.name	= "msm_camera_mt9v113",
+	.dev	= {
+		.platform_data = &msm_camera_sensor_mt9v113_data,
+	},
+};
+#endif
+
+static void __init msm8x60_init_cam(void)
+{
+	int i = 0;
+	struct platform_device *cam_dev[] = {
+#ifdef CONFIG_S5K3H2YX
+		&villec2_camera_sensor_s5k3h2yx,
+#endif
+#ifdef CONFIG_MT9V113
+		&villec2_camera_sensor_mt9v113,
+#endif
+	};
+
+	for (i = 0; i < ARRAY_SIZE(cam_dev); i++) {
+		platform_device_register(cam_dev[i]);
+	}
+
+	platform_device_register(&msm8x60_device_csic0);
+	platform_device_register(&msm8x60_device_csic1);
+	platform_device_register(&msm8x60_device_vfe);
+	platform_device_register(&msm8x60_device_vpe);
+}
 #endif
 
 
@@ -2325,6 +3262,8 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 	.bt_wakeup_pin = VILLEC2_GPIO_BT_CHIP_WAKE,
 	.host_wakeup_pin = VILLEC2_GPIO_BT_HOST_WAKE,
 };
+
+
 
 static struct platform_device villec2_rfkill = {
 	.name = "villec2_rfkill",
@@ -4044,6 +4983,9 @@ static struct platform_device *villec2_devices[] __initdata = {
 #ifdef CONFIG_MSM_GEMINI
 	&msm_gemini_device,
 #endif
+#ifdef CONFIG_RAWCHIP
+	&msm_rawchip_device,
+#endif
 
 #if defined(CONFIG_MSM_RPM_LOG) || defined(CONFIG_MSM_RPM_LOG_MODULE)
 	&msm8660_rpm_log_device,
@@ -4137,9 +5079,9 @@ static struct ion_co_heap_pdata co_ion_pdata = {
 };
 #endif
 
-static struct ion_platform_data ion_pdata = {
-	.nr = MSM_ION_HEAP_NUM,
-	.heaps = {
+struct ion_platform_heap msm8660_heaps[] = {
+
+
 		{
 			.id	= ION_SYSTEM_HEAP_ID,
 			.type	= ION_HEAP_TYPE_SYSTEM,
@@ -4235,7 +5177,11 @@ static struct ion_platform_data ion_pdata = {
 			.extra_data = (void *)&co_ion_pdata,
 		},
 #endif
-	}
+};
+
+static struct ion_platform_data ion_pdata = {
+        .nr = MSM_ION_HEAP_NUM,
+        .heaps = msm8660_heaps,
 };
 
 static struct platform_device ion_dev = {
@@ -6178,6 +7124,32 @@ static void __init fixup_i2c_configs(void)
 #endif
 }
 
+#ifdef CONFIG_MSM_CAMERA
+static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
+#ifdef CONFIG_S5K3H2YX
+	{
+		I2C_BOARD_INFO("s5k3h2yx", 0x20 >> 1),
+	},
+#endif
+#ifdef CONFIG_MT9V113
+	{
+		I2C_BOARD_INFO("mt9v113", 0x3C),
+	},
+#endif
+};
+
+#ifdef CONFIG_S5K3H2YX
+static struct i2c_registry msm8x60_i2c_devices_cam_s5k3h2yx[] __initdata = {
+	{
+		I2C_SURF | I2C_FFA,
+		MSM_GSBI4_QUP_I2C_BUS_ID,
+		msm_camera_boardinfo,
+		ARRAY_SIZE(msm_camera_boardinfo),
+	},
+};
+#endif
+
+#endif
 static void __init register_i2c_devices(void)
 {
 #ifdef CONFIG_I2C
@@ -6194,6 +7166,12 @@ static void __init register_i2c_devices(void)
 						msm8x60_i2c_devices[i].info,
 						msm8x60_i2c_devices[i].len);
 	}
+#ifdef CONFIG_MSM_CAMERA
+	i2c_register_board_info(msm8x60_i2c_devices_cam_s5k3h2yx[0].bus,
+		msm8x60_i2c_devices_cam_s5k3h2yx[0].info,
+		msm8x60_i2c_devices_cam_s5k3h2yx[0].len);
+#endif
+
 #endif
 }
 
@@ -6228,7 +7206,7 @@ static void __init msm8x60_init_buses(void)
 	void *gsbi_mem = ioremap_nocache(0x19C00000, 4);
 	
 	writel_relaxed(0x6 << 4, gsbi_mem);
-	
+	/* Ensure protocol code is written before proceeding further */
 	mb();
 	iounmap(gsbi_mem);
 
@@ -6265,18 +7243,21 @@ static void __init msm8x60_init_buses(void)
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
 #endif
 
-#ifdef CONFIG_BT
-	bt_export_bd_address();
-#endif
-#ifdef CONFIG_SERIAL_MSM_HS 
-	msm_uart_dm1_pdata.wakeup_irq = gpio_to_irq(VILLEC2_GPIO_BT_HOST_WAKE);
-	msm_device_uart_dm1.name = "msm_serial_hs_brcm";
-	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
-#endif
 
-#ifdef CONFIG_MSM_BUS_SCALING
+
+#ifdef CONFIG_BT
 
 	
+	bt_export_bd_address();
+
+#ifdef CONFIG_SERIAL_MSM_HS_BRCM
+	msm_device_uart_dm1.name = "msm_serial_hs_brcm";
+#else
+	msm_device_uart_dm1.name = "msm_serial_hs";
+#endif
+	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
+#endif
+	#ifdef CONFIG_MSM_BUS_SCALING
 	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2) {
 		msm_bus_apps_fabric_pdata.rpm_enabled = 1;
 		msm_bus_sys_fabric_pdata.rpm_enabled = 1;
@@ -8392,9 +9373,7 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	msm8x60_init_tlmm();
 	msm8x60_init_gpiomux(board_data->gpiomux_cfgs);
 	msm8x60_init_uart12dm();
-#ifdef CONFIG_MSM_CAMERA_V4L2
-	msm8x60_init_cam();
-#endif
+
 	msm8x60_init_mmc();
 
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
@@ -8463,6 +9442,15 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 		platform_device_register(&gpio_leds);
 #endif
 
+#ifdef CONFIG_RAWCHIP
+	spi_register_board_info(spi_rawchip_board_info,
+				ARRAY_SIZE(spi_rawchip_board_info));
+	config_gpio_table(msm_spi_on_gpio, ARRAY_SIZE(msm_spi_on_gpio));
+#endif
+
+#ifdef CONFIG_MSM_CAMERA
+	msm8x60_init_cam();
+#endif
 	villec2_init_keypad();
 	headset_device_register();
 	villec2_wifi_init();

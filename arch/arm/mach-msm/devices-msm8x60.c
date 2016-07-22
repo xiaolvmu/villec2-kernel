@@ -22,7 +22,7 @@
 #include <asm/mach/mmc.h>
 #include <asm/clkdev.h>
 #include <linux/msm_adc.h>
-#include <linux/msm_kgsl.h>
+#include <mach/kgsl.h>
 #include <linux/msm_rotator.h>
 #include <mach/msm_hsusb.h>
 #include "footswitch.h"
@@ -887,6 +887,16 @@ static struct resource kgsl_3d0_resources[] = {
 static struct kgsl_device_platform_data kgsl_3d0_pdata = {
 	.pwrlevel = {
 		{
+			.gpu_freq = 320000000,
+			.bus_freq = 4,
+			.io_fraction = 0,
+		},
+		{
+			.gpu_freq = 300000000,
+			.bus_freq = 4,
+			.io_fraction = 0,
+		},
+		{
 			.gpu_freq = 266667000,
 			.bus_freq = 4,
 			.io_fraction = 0,
@@ -911,8 +921,8 @@ static struct kgsl_device_platform_data kgsl_3d0_pdata = {
 			.bus_freq = 0,
 		},
 	},
-	.init_level = 0,
-	.num_levels = 5,
+	.init_level = 2,
+	.num_levels = 7,
 	.set_grp_async = NULL,
 	.idle_timeout = HZ/5,
 	.nap_allowed = true,
@@ -1634,45 +1644,91 @@ struct resource msm_vfe_resources[] = {
 
 static struct resource msm_vpe_resources[] = {
 	{
-		.name   = "vpe",
+		.name   = "msm_vpe",
 		.start	= 0x05300000,
 		.end	= 0x05300000 + SZ_1M - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
-		.name   = "vpe",
+		.name   = "msm_vpe",
 		.start	= INT_VPE,
 		.end	= INT_VPE,
 		.flags	= IORESOURCE_IRQ,
 	},
 };
 
-struct platform_device msm_device_csic0 = {
+static struct msm_cam_clk_info csic_clk_info[] = {
+	{"csi_src_clk", 177780000},
+	{"csi_clk", -1},
+	{"csi_pclk", -1},
+};
+
+static struct msm_cam_clk_info vfe_clk_info[] = {
+	{"vfe_clk", 228570000},
+	{"vfe_pclk", -1},
+	{"csi0_vfe_clk", -1},
+	{"csi1_vfe_clk", -1},
+};
+
+static struct msm_cam_clk_info vpe_clk_info[] = {
+	{"vpe_clk", 160000000},
+	{"vpe_pclk", -1},
+};
+
+struct msm_camera_platform_info csic_info = {
+	.clk_info = csic_clk_info,
+	.num_clks = ARRAY_SIZE(csic_clk_info),
+};
+
+struct msm_camera_platform_info vfe_info = {
+	.clk_info = vfe_clk_info,
+	.num_clks = ARRAY_SIZE(vfe_clk_info),
+};
+
+struct msm_camera_platform_info vpe_info = {
+	.clk_info = vpe_clk_info,
+	.num_clks = ARRAY_SIZE(vpe_clk_info),
+};
+
+
+struct platform_device msm8x60_device_csic0 = {
 	.name           = "msm_csic",
 	.id             = 0,
 	.resource       = msm_csic0_resources,
 	.num_resources  = ARRAY_SIZE(msm_csic0_resources),
+	.dev	= {
+			.platform_data = &csic_info,
+	},
 };
 
-struct platform_device msm_device_csic1 = {
+struct platform_device msm8x60_device_csic1 = {
 	.name           = "msm_csic",
 	.id             = 1,
 	.resource       = msm_csic1_resources,
 	.num_resources  = ARRAY_SIZE(msm_csic1_resources),
+	.dev	= {
+			.platform_data = &csic_info,
+	},
 };
 
-struct platform_device msm_device_vfe = {
+struct platform_device msm8x60_device_vfe = {
 	.name           = "msm_vfe",
 	.id             = 0,
 	.resource       = msm_vfe_resources,
 	.num_resources  = ARRAY_SIZE(msm_vfe_resources),
+	.dev	= {
+			.platform_data = &vfe_info,
+	},
 };
 
-struct platform_device msm_device_vpe = {
+struct platform_device msm8x60_device_vpe = {
 	.name           = "msm_vpe",
 	.id             = 0,
 	.resource       = msm_vpe_resources,
 	.num_resources  = ARRAY_SIZE(msm_vpe_resources),
+	.dev	= {
+			.platform_data = &vpe_info,
+	},
 };
 
 #endif
