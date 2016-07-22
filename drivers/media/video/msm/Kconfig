@@ -9,6 +9,23 @@ config MSM_CAMERA_V4L2
           native APIs are used through /dev/config0, /dev/frame0,
           and /dev/control0.
 
+config HTC_CAMERA_HAL_VERSION
+	depends on MSM_CAMERA && MACH_HTC
+	int "HTC Camera HAL version support"
+	default 4 if ARCH_APQ8064 && MACH_M7_UL
+	default 4 if ARCH_APQ8064 && MACH_T6_UL
+	default 4 if ARCH_MSM8930 && MACH_M4_UL
+	default 2 if ARCH_APQ8064 && MACH_MONARUDO
+	default 1 if !ARCH_APQ8064 && ARCH_MSM8960
+	default 0 if ARCH_MSM8X60
+	---help---
+	  This controls the version of the HTC camera HAL the
+	  kernel driver should be compatible with.
+	  MSM8960 devices should use version 1
+	  MONARUDO should use version 2
+	  M7 should use version 3
+	  T6 should use version 3
+
 comment "Camera Sensor Selection"
 config MT9T013
 	bool "Sensor mt9t013 (BAYER 3M)"
@@ -53,6 +70,13 @@ config S5K6A1GX
 	---help---
 	  Support for S5K6A1GX samsung sensor driver.
 	  It is a Bayer 1.3MP sensor it supports one mipi lanes.
+
+config S5K3H1GX_ACT
+	bool "Sensor s5k3h1gx actuator"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  Autofocus of s5k3h1gx actuator
 
 config AR0260
 	bool "Sensor ar0260"
@@ -168,6 +192,13 @@ config IMX074_ACT
 	---help---
 	Actuator for SONY 13.5 MP Bayer Sensor
 
+config IMX105_ACT
+	bool "Actuator IMX105 (BAYER 8M)"
+	depends on MSM_CAMERA && ARCH_MSM8960
+	default n
+	---help---
+	Actuator for SONY 8 MP Bayer Sensor
+
 config S5K3H2YX_ACT
 	bool "Sensor s5k3h2yx actuator"
 	depends on MSM_CAMERA
@@ -205,6 +236,15 @@ config DW9712_ACT
 	---help---
 	  dw9721 lens actuator driver for S5K4E1.
 	  Say Y here if this is msm7627A variant platform.
+
+config S5K3H1GX
+	bool "Sensor s5k3h1gx (Samsung 8M)"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  Support for S5K3H1GX samsung sensor driver.
+	  It is a Bayer 8MP sensor with auto focus and it supports
+	  two mipi lanes.
 
 config MSM_CAMERA_FLASH_SC628A
 	bool "Qualcomm MSM camera sc628a flash support"
@@ -271,6 +311,20 @@ config RAWCHIP
 	---help---
 	  ST Yushan rawchip
 
+config RAWCHIPII
+	bool "RawchipII"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  ST Yushan rawchipII
+
+config CAMERA_IMAGE_NONE_BOARD
+	bool "CameraImageNoneBoard"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  camera image none board
+
 config QUP_EXCLUSIVE_TO_CAMERA
 	bool "QUP exclusive to camera"
 	depends on MSM_CAMERA
@@ -296,6 +350,13 @@ config IMX091
 	depends on MSM_CAMERA
 	---help---
 	SONY 13 MP Bayer Sensor
+
+config IMX105
+	bool "Sensor IMX105 (BAYER 8M)"
+	depends on MSM_CAMERA && (ARCH_MSM8X60 || ARCH_MSM8960)
+	default n
+	---help---
+	SONY 8 MP Bayer Sensor
 
 config IMX175
 	bool "Sensor IMX175 (BAYER 8M)"
@@ -348,7 +409,21 @@ config TI201_ACT
        bool "Lens actuator ti201"
        depends on MSM_CAMERA
        ---help---
-         ti201 lens actuator driver for SONY IMX175 and IMX091.
+         ti201 lens actuator driver for SONY IMX175, IMX091 and VD6869.
+
+config ACT_OIS_BINDER
+       bool "Act_Ois_Binder"
+       depends on MSM_CAMERA
+       default n
+       ---help---
+         Act_Ois_Binder for OIS function through ti201 lens actuator driver.
+
+config LC898212_ACT
+       bool "Lens actuator lc898212"
+       depends on MSM_CAMERA
+       default n
+       ---help---
+         lc898212 lens actuator driver for VD6869.
 
 config MT9V113
 	bool "Sensor mt9v113 (VGA YUV)"
@@ -385,6 +460,13 @@ config RAWCHIP_MCLK
 	---help---
 	  ST Yushan rawchip MCLK
 
+config DISABLE_MCLK_RAWCHIP_TO_MAINCAM
+	bool "DISABLE MCLK FROM RAWCHIP TO MAINCAM"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  For the design for K2 two MCLK control of rawchip
+
 config S5K6A2YA
 	bool "Sensor s5k6a2ya (Samsung 1.6M)"
 	depends on MSM_CAMERA
@@ -393,10 +475,24 @@ config S5K6A2YA
 	  Support for S5K6A2YA samsung sensor driver.
 	  It is a Bayer 1.6MP sensor it supports one mipi lanes.
 
+config S5K6AAFX
+	bool "Sensor s5k6aafx (Samsung 1.3M)"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  Samsung 1.3M without Autofocus
+
 config VD6869
 	bool "Sensor VD6869 (BAYER 4M)"
 	depends on MSM_CAMERA
 	default n
 	---help---
 	ST 4MP Bayer Sensor
+
+config OV4688
+	bool "Sensor ov4688 (BAYER 4M)"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	ov 4MP Bayer Sensor
 

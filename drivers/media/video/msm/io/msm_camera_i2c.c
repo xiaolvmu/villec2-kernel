@@ -12,11 +12,21 @@
 
 #include "msm_camera_i2c.h"
 
-#if defined(CONFIG_MACH_MONARUDO) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DELUXE_R) || defined(CONFIG_MACH_DUMMY)\
-			|| defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
+#if defined(CONFIG_MACH_MONARUDO) || defined(CONFIG_MACH_DELUXE_J) || defined(CONFIG_MACH_DELUXE_R) || defined(CONFIG_MACH_IMPRESSION_J)\
+			|| defined(CONFIG_MACH_DELUXE_U) || defined(CONFIG_MACH_DELUXE_UL) || defined(CONFIG_MACH_DELUXE_UB1)\
+			|| defined(CONFIG_MACH_T6_TL) || defined(CONFIG_MACH_T6_DUG) || defined(CONFIG_MACH_T6_DWG)\
+			|| defined(CONFIG_MACH_T6_UL) || defined(CONFIG_MACH_T6_ULA) || defined(CONFIG_MACH_T6_WL)\
+			|| defined(CONFIG_MACH_T6_WHL) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_T6_U)
 
+
+#if defined(CONFIG_MACH_T6_TL) || defined(CONFIG_MACH_T6_DUG) || defined(CONFIG_MACH_T6_DWG)\
+|| defined(CONFIG_MACH_T6_UL) || defined(CONFIG_MACH_T6_ULA) || defined(CONFIG_MACH_T6_WL)\
+|| defined(CONFIG_MACH_T6_WHL) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_T6_U)
+
+#define MAX_I2C_RETRIES 2
+#else
 #define MAX_I2C_RETRIES 20
-
+#endif
 static int i2c_transfer_retry(struct i2c_adapter *adap,
 			struct i2c_msg *msgs,
 			int len)
@@ -57,8 +67,11 @@ int32_t msm_camera_i2c_rxdata(struct msm_camera_i2c_client *dev_client,
 			.buf   = rxdata,
 		},
 	};
-#if defined(CONFIG_MACH_MONARUDO) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DELUXE_R) || defined(CONFIG_MACH_DUMMY)\
-		|| defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
+#if defined(CONFIG_MACH_MONARUDO) || defined(CONFIG_MACH_DELUXE_J) || defined(CONFIG_MACH_DELUXE_R) || defined(CONFIG_MACH_IMPRESSION_J)\
+		|| defined(CONFIG_MACH_DELUXE_U) || defined(CONFIG_MACH_DELUXE_UL) || defined(CONFIG_MACH_DELUXE_UB1)\
+        || defined(CONFIG_MACH_T6_TL) || defined(CONFIG_MACH_T6_DUG) || defined(CONFIG_MACH_T6_DWG)\
+        || defined(CONFIG_MACH_T6_UL) || defined(CONFIG_MACH_T6_ULA) || defined(CONFIG_MACH_T6_WL)\
+        || defined(CONFIG_MACH_T6_WHL) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_T6_U)
 	rc = i2c_transfer_retry(dev_client->client->adapter, msgs, 2);
 #else
 	rc = i2c_transfer(dev_client->client->adapter, msgs, 2);
@@ -81,8 +94,11 @@ int32_t msm_camera_i2c_txdata(struct msm_camera_i2c_client *dev_client,
 			.buf = txdata,
 		 },
 	};
-#if defined(CONFIG_MACH_MONARUDO) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DELUXE_R) || defined(CONFIG_MACH_DUMMY)\
-			|| defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_DUMMY)
+#if defined(CONFIG_MACH_MONARUDO) || defined(CONFIG_MACH_DELUXE_J) || defined(CONFIG_MACH_DELUXE_R) || defined(CONFIG_MACH_IMPRESSION_J)\
+			|| defined(CONFIG_MACH_DELUXE_U) || defined(CONFIG_MACH_DELUXE_UL) || defined(CONFIG_MACH_DELUXE_UB1)\
+            || defined(CONFIG_MACH_T6_TL) || defined(CONFIG_MACH_T6_DUG) || defined(CONFIG_MACH_T6_DWG)\
+            || defined(CONFIG_MACH_T6_UL) || defined(CONFIG_MACH_T6_ULA) || defined(CONFIG_MACH_T6_WL)\
+            || defined(CONFIG_MACH_T6_WHL) || defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_T6_U)
 	rc = i2c_transfer_retry(dev_client->client->adapter, msg, 1);
 #else
 	rc = i2c_transfer(dev_client->client->adapter, msg, 1);
@@ -402,7 +418,9 @@ int32_t msm_camera_i2c_write_tbl(struct msm_camera_i2c_client *client,
 	struct msm_camera_i2c_reg_conf *reg_conf_tbl, uint16_t size,
 	enum msm_camera_i2c_data_type data_type)
 {
-	int i;
+#define MIN(a,b) ((a)>(b)?(b):(a))
+	int i,write_len,burst_size=128,remain_len=0,addr=0;
+	uint8_t* buf=0;
 	int32_t rc = -EFAULT;
 	for (i = 0; i < size; i++) {
 		enum msm_camera_i2c_data_type dt;
@@ -417,7 +435,22 @@ int32_t msm_camera_i2c_write_tbl(struct msm_camera_i2c_client *client,
 			rc = msm_camera_i2c_poll2(client, reg_conf_tbl);
 		
 		}
+        else if (reg_conf_tbl->cmd_type == MSM_CAMERA_I2C_CMD_WRITE_BURST) {
+			buf = reg_conf_tbl->burst_data;
+			remain_len = reg_conf_tbl->burst_count;
+			write_len = MIN (reg_conf_tbl->burst_count,burst_size);
+			addr = reg_conf_tbl->reg_addr;
 
+			do {
+				rc = msm_camera_i2c_write_seq(client,addr,buf,write_len);
+
+				addr += write_len;
+				buf += write_len;
+				remain_len -= write_len;
+				write_len = MIN(remain_len ,burst_size);
+			}
+			while (rc>=0 && write_len>0);
+        }
 		else {
 			if (reg_conf_tbl->dt == 0)
 				dt = data_type;
@@ -627,4 +660,81 @@ int32_t msm_sensor_write_all_conf_array(struct msm_camera_i2c_client *client,
 	return rc;
 }
 
+int32_t msm_camera_i2c_rxdata_rumbas(struct msm_camera_i2c_client *dev_client,
+	unsigned char *rxdata, int data_length)
+{
+	int32_t rc = 0;
+	uint16_t saddr = dev_client->client->addr >> 1;
+	struct i2c_msg msgs[] = {
+		{
+			.addr  = saddr,
+			.flags = 0,
+			.len   = data_length,
+			.buf   = rxdata,
+		},
+		{
+			.addr  = saddr,
+			.flags = I2C_M_RD,
+			.len   = data_length,
+			.buf   = rxdata,
+		},
+	};
+	rc = i2c_transfer(dev_client->client->adapter, msgs, 2);
+	if (rc < 0)
+		S_I2C_DBG("msm_camera_i2c_rxdata failed 0x%x\n", saddr);
+	return (rc < 0) ? rc : 0;
+}
 
+
+int32_t msm_camera_i2c_read_seq_rumbas(struct msm_camera_i2c_client *client,
+	uint16_t addr, uint8_t *data, uint16_t num_byte)
+{
+	int32_t rc = -EFAULT;
+	unsigned char buf[client->addr_type+num_byte];
+	int i;
+
+	memset(buf, 0, sizeof(buf));
+	if ((client->addr_type != MSM_CAMERA_I2C_BYTE_ADDR
+		&& client->addr_type != MSM_CAMERA_I2C_WORD_ADDR)
+		|| num_byte == 0)
+		return rc;
+
+	if (client->addr_type == MSM_CAMERA_I2C_BYTE_ADDR) {
+		buf[0] = addr;
+	} else if (client->addr_type == MSM_CAMERA_I2C_WORD_ADDR) {
+		buf[0] = addr >> BITS_PER_BYTE;
+		buf[1] = addr;
+	}
+
+	rc = msm_camera_i2c_rxdata_rumbas(client, buf, num_byte);
+	if (rc < 0) {
+		S_I2C_DBG("%s fail\n", __func__);
+		return rc;
+	}
+
+	S_I2C_DBG("%s addr = 0x%x", __func__, addr);
+	for (i = 0; i < num_byte; i++) {
+		data[i] = buf[i];
+		S_I2C_DBG("Byte %d: 0x%x\n", i, buf[i]);
+		S_I2C_DBG("Data: 0x%x\n", data[i]);
+	}
+	return rc;
+}
+
+int32_t msm_camera_i2c_txdata_rumbas(struct msm_camera_i2c_client *dev_client, unsigned char *txdata, int length)
+{
+	int32_t rc = 0;
+	uint16_t saddr = dev_client->client->addr >> 1;
+
+	struct i2c_msg msg[] = {
+		{
+			.addr = saddr,
+			.flags = 0,
+			.len = length,
+			.buf = txdata,
+		 },
+	};
+	rc = i2c_transfer(dev_client->client->adapter, msg, 1);
+	
+	return rc;
+}

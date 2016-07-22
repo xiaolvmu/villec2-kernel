@@ -31,7 +31,7 @@
 #include <media/msm_isp.h>
 #include <mach/camera.h>
 #include <media/msm_isp.h>
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #include <media/msm_gestures.h>
 #include <linux/iommu.h>
 
@@ -137,6 +137,11 @@ struct isp_msg_output {
 	uint32_t  frameCounter;
 };
 
+struct rdi_count_msg {
+	uint32_t rdi_interface;
+	uint32_t count;
+};
+
 enum msm_camera_v4l2_subdev_notify {
 	NOTIFY_CID_CHANGE, 
 	NOTIFY_ISP_MSG_EVT, 
@@ -144,6 +149,7 @@ enum msm_camera_v4l2_subdev_notify {
 	NOTIFY_VFE_MSG_STATS,  
 	NOTIFY_VFE_MSG_COMP_STATS, 
 	NOTIFY_VFE_BUF_EVT, 
+	NOTIFY_AXI_RDI_SOF_COUNT,
 	NOTIFY_ISPIF_STREAM, 
 	NOTIFY_VPE_MSG_EVT,
 	NOTIFY_PCLK_CHANGE, 
@@ -155,6 +161,8 @@ enum msm_camera_v4l2_subdev_notify {
 	NOTIFY_AXI_IRQ,
 	NOTIFY_GESTURE_EVT, 
 	NOTIFY_GESTURE_CAM_EVT, 
+	NOTIFY_VFE_CAMIF_ERROR,
+	NOTIFY_VFE_VIOLATION,
 	NOTIFY_INVALID
 };
 
@@ -166,7 +174,7 @@ enum isp_vfe_cmd_id {
 
 struct msm_cam_v4l2_device;
 struct msm_cam_v4l2_dev_inst;
-#define MSM_MAX_IMG_MODE                8
+#define MSM_MAX_IMG_MODE                MSM_V4L2_EXT_CAPTURE_MODE_MAX
 
 enum msm_buffer_state {
 	MSM_BUFFER_STATE_UNUSED,
@@ -279,6 +287,8 @@ struct msm_cam_media_controller {
 #ifdef CONFIG_PERFLOCK
 	struct perf_lock *cam_perf_lock;
 #endif
+	struct stats_htc_af htc_af_info;
+	atomic_t dispatch_command;
 };
 
 struct msm_isp_ops {
@@ -396,6 +406,7 @@ struct msm_cam_config_dev {
 	
 	struct msm_cam_media_controller *p_mctl;
 	struct msm_mem_map_info mem_map;
+	int dev_num;
 };
 #define MAX_NUM_ACTIVE_CAMERA 3
 
@@ -413,6 +424,12 @@ struct msm_cam_server_mctl_inst {
 	uint32_t handle;
 };
 
+struct cam_vcm_wa_ctrl {
+	void (*cam_do_vcm_on_cb)(void);
+	void (*cam_do_vcm_off_cb)(void);
+	void (*vcm_vreg_off)(void);
+	void (*actuator_power_off_af)(void);
+};
 
 struct msm_cam_server_dev {
 
@@ -428,7 +445,7 @@ struct msm_cam_server_dev {
 	
 	struct msm_cam_config_dev_info config_info;
 	
-	struct msm_cam_v4l2_device *pcam_active;
+	struct msm_cam_v4l2_device *pcam_active[MAX_NUM_ACTIVE_CAMERA];
 	
 	atomic_t number_pcam_active;
 	struct v4l2_queue_util server_command_queue;
@@ -436,7 +453,7 @@ struct msm_cam_server_dev {
 	uint32_t server_evt_id;
 	struct msm_cam_server_mctl_inst mctl[MAX_NUM_ACTIVE_CAMERA];
 	uint32_t mctl_handle_cnt;
-	
+
 	int use_count;
 	
 	struct msm_isp_ops *isp_subdev[MSM_MAX_CAMERA_CONFIGS];
@@ -453,6 +470,9 @@ struct msm_cam_server_dev {
 	struct v4l2_subdev *axi_device[MAX_NUM_AXI_DEV];
 	struct v4l2_subdev *vpe_device[MAX_NUM_VPE_DEV];
 	struct v4l2_subdev *gesture_device;
+
+	struct msm_cam_media_controller *rdi0_mctl;
+	struct msm_cam_media_controller *pix0_mctl;
 
 #ifdef CONFIG_PERFLOCK
 	struct perf_lock cam_perf_lock;
@@ -504,9 +524,14 @@ unsigned long msm_pmem_stats_ptov_lookup(
 	struct msm_cam_media_controller *mctl,
 	unsigned long addr, int *fd);
 
+unsigned long msm_pmem_stats_ptov_lookup_2(
+	struct msm_cam_media_controller *mctl,
+	unsigned long addr, int *fd);
+
 int msm_vfe_subdev_init(struct v4l2_subdev *sd,
 			struct msm_cam_media_controller *mctl);
-void msm_vfe_subdev_release(struct v4l2_subdev *sd);
+void msm_vfe_subdev_release(struct v4l2_subdev *sd,
+			struct msm_cam_media_controller *mctl);
 
 int msm_isp_subdev_ioctl(struct v4l2_subdev *sd,
 	struct msm_vfe_cfg_cmd *cfgcmd, void *data);
@@ -582,6 +607,10 @@ int msm_rawchip_attr_node(void);
 uint32_t msm_camera_get_mctl_handle(void);
 struct msm_cam_media_controller *msm_camera_get_mctl(uint32_t handle);
 void msm_camera_free_mctl(uint32_t handle);
+struct msm_cam_media_controller *msm_camera_get_rdi0_mctl(void);
+void msm_camera_set_rdi0_mctl(struct msm_cam_media_controller *mctl);
+struct msm_cam_media_controller *msm_camera_get_pix0_mctl(void);
+void msm_camera_set_pix0_mctl(struct msm_cam_media_controller *mctl);
 int msm_server_open_client(int *p_qidx);
 int msm_server_send_ctrl(struct msm_ctrl_cmd *out, int ctrl_id);
 int msm_server_close_client(int idx);

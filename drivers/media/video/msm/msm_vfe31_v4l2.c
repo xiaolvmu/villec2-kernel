@@ -3700,7 +3700,7 @@ vfe_remap_failed:
 	return rc;
 }
 
-void msm_vfe_subdev_release(struct v4l2_subdev *sd)
+void msm_vfe_subdev_release(struct v4l2_subdev *sd, struct msm_cam_media_controller *mctl)
 {
 	struct msm_cam_media_controller *pmctl =
 		(struct msm_cam_media_controller *)v4l2_get_subdev_hostdata(sd);

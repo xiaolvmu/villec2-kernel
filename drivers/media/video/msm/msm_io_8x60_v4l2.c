@@ -122,7 +122,7 @@ void msm_io_memcpy(void __iomem *dest_addr, void __iomem *src_addr, u32 len)
 }
 
 
-int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
+int msm_camio_clk_enable(struct msm_camera_sensor_info* sinfo, enum msm_camio_clk_type clktype)
 {
 	int rc = 0;
 	struct clk *clk = NULL;
@@ -174,7 +174,7 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 	return rc;
 }
 
-int msm_camio_clk_disable(enum msm_camio_clk_type clktype)
+int msm_camio_clk_disable(struct msm_camera_sensor_info* sinfo, enum msm_camio_clk_type clktype)
 {
 	int rc = 0;
 	struct clk *clk = NULL;
@@ -254,10 +254,10 @@ int msm_camio_jpeg_clk_disable(void)
 		}
 		regulator_put(fs_ijpeg);
 	}
-	rc = msm_camio_clk_disable(CAMIO_JPEG_PCLK);
+	rc = msm_camio_clk_disable(0, CAMIO_JPEG_PCLK);
 	if (rc < 0)
 		return rc;
-	rc = msm_camio_clk_disable(CAMIO_JPEG_CLK);
+	rc = msm_camio_clk_disable(0, CAMIO_JPEG_CLK);
 	CDBG("%s: exit %d\n", __func__, rc);
 	return rc;
 }
@@ -265,10 +265,10 @@ int msm_camio_jpeg_clk_disable(void)
 int msm_camio_jpeg_clk_enable(void)
 {
 	int rc = 0;
-	rc = msm_camio_clk_enable(CAMIO_JPEG_CLK);
+	rc = msm_camio_clk_enable(0, CAMIO_JPEG_CLK);
 	if (rc < 0)
 		return rc;
-	rc = msm_camio_clk_enable(CAMIO_JPEG_PCLK);
+	rc = msm_camio_clk_enable(0, CAMIO_JPEG_PCLK);
 	if (rc < 0)
 		return rc;
 	fs_ijpeg = regulator_get(NULL, "fs_ijpeg");
@@ -348,10 +348,10 @@ int msm_camio_vpe_clk_disable(void)
 		regulator_put(fs_vpe);
 	}
 
-	rc = msm_camio_clk_disable(CAMIO_VPE_CLK);
+	rc = msm_camio_clk_disable(0, CAMIO_VPE_CLK);
 	if (rc < 0)
 		return rc;
-	rc = msm_camio_clk_disable(CAMIO_VPE_PCLK);
+	rc = msm_camio_clk_disable(0, CAMIO_VPE_PCLK);
 	return rc;
 }
 
@@ -369,11 +369,11 @@ int msm_camio_vpe_clk_enable(uint32_t clk_rate)
 	}
 
 	vpe_clk_rate = clk_rate;
-	rc = msm_camio_clk_enable(CAMIO_VPE_CLK);
+	rc = msm_camio_clk_enable(0, CAMIO_VPE_CLK);
 	if (rc < 0)
 		return rc;
 
-	rc = msm_camio_clk_enable(CAMIO_VPE_PCLK);
+	rc = msm_camio_clk_enable(0, CAMIO_VPE_PCLK);
 	return rc;
 }
 
