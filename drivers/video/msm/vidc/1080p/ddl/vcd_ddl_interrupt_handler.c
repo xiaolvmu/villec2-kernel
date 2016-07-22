@@ -17,7 +17,6 @@
 #include "vcd_ddl_metadata.h"
 #include "vcd_res_tracker_api.h"
 #include <linux/delay.h>
-#include <linux/msm_ion.h>
 
 static void ddl_decoder_input_done_callback(
 	struct ddl_client_context *ddl, u32 frame_transact_end);

@@ -14,7 +14,6 @@
 #include <linux/pm_qos.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
-#include <linux/msm_ion.h>
 #include <linux/regulator/consumer.h>
 #include <linux/pm_runtime.h>
 #include <mach/clk.h>
