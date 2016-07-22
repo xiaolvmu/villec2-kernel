@@ -11,6 +11,7 @@
  *
  */
 #include <mach/msm_memtypes.h>
+#include <linux/msm_ion.h>
 #include "vcd_ddl.h"
 #include "vcd_ddl_metadata.h"
 #include "vcd_res_tracker_api.h"

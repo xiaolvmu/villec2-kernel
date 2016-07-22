@@ -27,6 +27,7 @@
 #include <linux/workqueue.h>
 #include <linux/android_pmem.h>
 #include <linux/clk.h>
+#include <linux/msm_ion.h>
 #include <mach/msm_subsystem_map.h>
 #include <media/msm/vidc_type.h>
 #include <media/msm/vcd_api.h>

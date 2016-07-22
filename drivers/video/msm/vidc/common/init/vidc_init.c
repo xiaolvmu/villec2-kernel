@@ -17,6 +17,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/msm_ion.h>
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
