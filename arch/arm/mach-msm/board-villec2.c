@@ -135,7 +135,7 @@
 #include "board-storage-common-a.h"
 #include <mach/board_htc.h>
 
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #include <mach/ion.h>
 #include <mach/msm_rtb.h>
 #include <mach/htc_util.h>
