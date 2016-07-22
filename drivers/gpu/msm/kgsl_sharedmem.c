@@ -753,7 +753,7 @@ _kgsl_sharedmem_ion_alloc(struct kgsl_memdesc *memdesc,
 	if (kgsl_client == NULL)
 		kgsl_client = msm_ion_client_create(-1, "KGSL");
 
-	handle = ion_alloc(kgsl_client, size, SZ_4K, 0x1 << ION_SF_HEAP_ID);
+	handle = ion_alloc(kgsl_client, size, SZ_4K, 0x1 << ION_SF_HEAP_ID, 0);
 	if (IS_ERR_OR_NULL(handle)) {
 		ret = -ENOMEM;
 		goto done;
